@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modbus 6.4 主从站控制台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #e7edf3;
+        --surface: #f8fafc;
+        --surface-strong: #ffffff;
+        --ink: #102033;
+        --muted: #526174;
+        --line: #b8c4d2;
+        --field: #eef3f7;
+        --green: #126b5c;
+        --green-strong: #0b4d42;
+        --blue: #245b9b;
+        --gold: #b77a12;
+        --red: #9b2720;
+        --ok-bg: #dceee7;
+        --err-bg: #f5dcd8;
+        --shadow: 0 14px 36px rgba(16, 32, 51, 0.14);
+        font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: var(--bg);
+        color: var(--ink);
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1280px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 22px 0 28px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: var(--red);
+        font-size: 32px;
+        line-height: 1.2;
+        font-weight: 800;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+        line-height: 1.2;
+      }
+
+      h2 {
+        font-size: 18px;
+        line-height: 1.25;
+      }
+
+      h3 {
+        font-size: 15px;
+        line-height: 1.3;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      .title-block {
+        text-align: center;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 6px;
+        min-height: 42px;
+        padding: 0 16px;
+        color: #fff;
+        background: var(--green);
+        cursor: pointer;
+        font-weight: 800;
+      }
+
+      .btn:hover {
+        background: var(--green-strong);
+      }
+
+      .btn.secondary {
+        background: var(--blue);
+      }
+
+      .btn.ghost {
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: var(--surface-strong);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.08fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+
+      .panel + .panel {
+        margin-top: 16px;
+      }
+
+      .heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        margin-bottom: 14px;
+      }
+
+      .heading span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: #203246;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid #96a6b8;
+        border-radius: 6px;
+        background: var(--field);
+        color: var(--ink);
+        padding: 10px 11px;
+        outline: none;
+      }
+
+      textarea {
+        min-height: 112px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--green);
+        box-shadow: 0 0 0 3px rgba(18, 107, 92, 0.14);
+      }
+
+      .field-span {
+        grid-column: 1 / -1;
+      }
+
+      .status {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        border-radius: 6px;
+        padding: 12px;
+        color: var(--muted);
+        background: #dbe4ee;
+        font-weight: 800;
+      }
+
+      .status.ok {
+        color: var(--green-strong);
+        background: var(--ok-bg);
+      }
+
+      .status.error {
+        color: var(--red);
+        background: var(--err-bg);
+      }
+
+      .segment {
+        display: inline-grid;
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--surface-strong);
+      }
+
+      .segment button {
+        min-height: 38px;
+        border: 0;
+        border-right: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-weight: 800;
+      }
+
+      .segment button:last-child {
+        border-right: 0;
+      }
+
+      .segment button.active {
+        color: #fff;
+        background: var(--green);
+      }
+
+      .command-box {
+        display: grid;
+        gap: 10px;
+      }
+
+      pre {
+        margin: 0;
+        min-height: 54px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        border: 1px solid #9aa9bb;
+        border-radius: 8px;
+        background: #172334;
+        color: #eaf1f8;
+        padding: 12px;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .metric {
+        border-left: 4px solid var(--green);
+        border-radius: 7px;
+        background: var(--surface-strong);
+        padding: 12px;
+        min-height: 76px;
+      }
+
+      .metric:nth-child(2) {
+        border-left-color: var(--blue);
+      }
+
+      .metric:nth-child(3) {
+        border-left-color: var(--gold);
+      }
+
+      .metric:nth-child(4) {
+        border-left-color: var(--red);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+        background: var(--surface-strong);
+      }
+
+      th,
+      td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+
+      th {
+        background: #d6a548;
+        color: #171007;
+        font-size: 13px;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .empty {
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 10px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-strong);
+        padding: 10px;
+      }
+
+      .badge {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--green);
+        color: #fff;
+        font-weight: 900;
+      }
+
+      .step p {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 980px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .actions {
+          justify-content: stretch;
+        }
+
+        .actions .btn {
+          flex: 1 1 180px;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(100vw - 20px, 1280px);
+          padding-top: 12px;
+        }
+
+        h1 {
+          font-size: 22px;
+        }
+
+        .eyebrow {
+          font-size: 26px;
+        }
+
+        .grid,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .segment {
+          width: 100%;
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="title-block">
+          <p class="eyebrow">Modbus 串行链路安全扩展</p>
+          <h1>后量子混合 PKI 主从站控制台</h1>
+        </div>
+        <div class="actions">
+          <button class="btn secondary" id="buildCommands" type="button">生成命令</button>
+          <button class="btn" id="simulateRead" type="button">模拟读取</button>
+          <button class="btn ghost" id="resetPage" type="button">重置</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <div>
+          <section class="panel">
+            <div class="heading">
+              <h2>端点参数</h2>
+              <span>6.4 主从站</span>
+            </div>
+            <form id="configForm" class="grid">
+              <label>
+                监听地址
+                <input name="host" value="127.0.0.1" autocomplete="off" />
+              </label>
+              <label>
+                监听端口
+                <input name="port" value="15020" inputmode="numeric" />
+              </label>
+              <label>
+                从站地址
+                <input name="slave_id" value="1" inputmode="numeric" />
+              </label>
+              <label>
+                服务器 ID
+                <input name="server_id" value="0x1001000100000001" autocomplete="off" />
+              </label>
+              <label>
+                客户端 ID
+                <input name="client_id" value="0x2001000100000001" autocomplete="off" />
+              </label>
+              <label>
+                读取数量
+                <input name="quantity" value="4" inputmode="numeric" />
+              </label>
+              <label>
+                起始地址
+                <input name="start" value="0" inputmode="numeric" />
+              </label>
+              <label>
+                加密模式
+                <select name="mode">
+                  <option value="aes_gcm">aes_gcm</option>
+                </select>
+              </label>
+              <label class="field-span">
+                保持寄存器
+                <textarea name="registers">10,20,30,40,50,60,70,80,90,100,110,120</textarea>
+              </label>
+              <div class="status field-span" id="status">等待操作</div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="heading">
+              <h2>启动命令</h2>
+              <div class="segment" role="tablist" aria-label="命令视图">
+                <button class="active" id="slaveTab" type="button">从站</button>
+                <button id="masterTab" type="button">主站</button>
+              </div>
+            </div>
+            <div class="command-box">
+              <pre id="slaveCommand"></pre>
+              <pre id="masterCommand" class="hidden"></pre>
+              <button class="btn ghost" id="copyCommand" type="button">复制当前命令</button>
+            </div>
+          </section>
+        </div>
+
+        <div>
+          <section class="panel">
+            <div class="heading">
+              <h2>会话摘要</h2>
+              <span id="summary">未生成</span>
+            </div>
+            <div class="metrics">
+              <div class="metric">
+                <span>APDU</span>
+                <strong id="apduMetric">0</strong>
+              </div>
+              <div class="metric">
+                <span>KEM_C</span>
+                <strong>1088B</strong>
+              </div>
+              <div class="metric">
+                <span>KEM_BC</span>
+                <strong>1088B</strong>
+              </div>
+              <div class="metric">
+                <span>Mode</span>
+                <strong id="modeMetric">aes_gcm</strong>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>地址</th>
+                    <th>十进制</th>
+                    <th>十六进制</th>
+                  </tr>
+                </thead>
+                <tbody id="registerRows">
+                  <tr>
+                    <td class="empty" colspan="3">暂无读取结果</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="heading">
+              <h2>6.4 消息序列</h2>
+              <span>主从站握手</span>
+            </div>
+            <div class="timeline" id="timeline"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const defaults = {
+        host: "127.0.0.1",
+        port: "15020",
+        slave_id: "1",
+        server_id: "0x1001000100000001",
+        client_id: "0x2001000100000001",
+        start: "0",
+        quantity: "4",
+        mode: "aes_gcm",
+        registers: "10,20,30,40,50,60,70,80,90,100,110,120",
+      };
+
+      const form = document.querySelector("#configForm");
+      const statusEl = document.querySelector("#status");
+      const summaryEl = document.querySelector("#summary");
+      const apduMetric = document.querySelector("#apduMetric");
+      const modeMetric = document.querySelector("#modeMetric");
+      const slaveCommandEl = document.querySelector("#slaveCommand");
+      const masterCommandEl = document.querySelector("#masterCommand");
+      const registerRows = document.querySelector("#registerRows");
+      const timeline = document.querySelector("#timeline");
+      const slaveTab = document.querySelector("#slaveTab");
+      const masterTab = document.querySelector("#masterTab");
+
+      const steps = [
+        ["从站", "ss_open_req", "从站服务器发起会话打开请求。"],
+        ["主站", "ss_open_cnf", "主站返回支持的安全系统版本位图。"],
+        ["从站", "ss_data_req", "从站发送 Server_Dev_Cert、Server_Brand_Cert，并请求 KEM_C、KEM_BC、mode 和客户端证书链。"],
+        ["主站", "ss_data_cnf", "主站返回 KEM_C、KEM_BC、mode、Client_Dev_Cert、Client_Brand_Cert。"],
+        ["从站", "ss_data_req", "从站请求 AKH。"],
+        ["主站", "ss_data_cnf", "主站返回 AKH，从站比对 AKM。"],
+        ["双向", "ss_data_send", "双方使用 CK/CIV 或 BCK/BCIV 传输加密 Modbus PDU。"],
+      ];
+
+      function parseInteger(value, name) {
+        const text = String(value).trim();
+        const number = text.startsWith("0x") || text.startsWith("0X") ? Number.parseInt(text, 16) : Number(text);
+        if (!Number.isInteger(number)) {
+          throw new Error(`${name} 必须是整数`);
+        }
+        return number;
+      }
+
+      function parseBigIntField(value, name) {
+        const text = String(value).trim();
+        try {
+          return text.startsWith("0x") || text.startsWith("0X") ? BigInt(text) : BigInt(text || "0");
+        } catch {
+          throw new Error(`${name} 必须是整数`);
+        }
+      }
+
+      function collect() {
+        return Object.fromEntries(new FormData(form).entries());
+      }
+
+      function parseRegisters(raw) {
+        const values = String(raw)
+          .replace(/\n/g, ",")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .map((item) => parseInteger(item, "保持寄存器"));
+
+        if (!values.length) {
+          throw new Error("至少需要 1 个保持寄存器");
+        }
+        values.forEach((value) => {
+          if (value < 0 || value > 0xffff) {
+            throw new Error("保持寄存器取值范围为 0..65535");
+          }
+        });
+        return values;
+      }
+
+      function validateConfig(data) {
+        const port = parseInteger(data.port, "监听端口");
+        const slaveId = parseInteger(data.slave_id, "从站地址");
+        const serverId = parseBigIntField(data.server_id, "服务器 ID");
+        const clientId = parseBigIntField(data.client_id, "客户端 ID");
+        const start = parseInteger(data.start, "起始地址");
+        const quantity = parseInteger(data.quantity, "读取数量");
+        const registers = parseRegisters(data.registers);
+
+        if (port < 0 || port > 65535) throw new Error("监听端口范围为 0..65535");
+        if (slaveId < 1 || slaveId > 247) throw new Error("从站地址范围为 1..247");
+        if (serverId < 0n || serverId > 0xffffffffffffffffn) throw new Error("服务器 ID 范围为 0..0xffffffffffffffff");
+        if (clientId < 0n || clientId > 0xffffffffffffffffn) throw new Error("客户端 ID 范围为 0..0xffffffffffffffff");
+        if (start < 0 || start > 65535) throw new Error("起始地址范围为 0..65535");
+        if (quantity < 1 || quantity > 125) throw new Error("读取数量范围为 1..125");
+        if (start + quantity > registers.length) throw new Error("读取范围超出保持寄存器数量");
+
+        return { port, slaveId, serverId, clientId, start, quantity, registers };
+      }
+
+      function shellQuote(value) {
+        const text = String(value);
+        if (/^[A-Za-z0-9_./:-]+$/.test(text)) return text;
+        return `'${text.replace(/'/g, "'\\''")}'`;
+      }
+
+      function setStatus(message, kind = "") {
+        statusEl.textContent = message;
+        statusEl.className = `status ${kind}`.trim();
+      }
+
+      function renderTimeline() {
+        timeline.innerHTML = steps
+          .map(
+            ([actor, name, text], index) => `
+              <div class="step">
+                <div class="badge">${index + 1}</div>
+                <div>
+                  <h3>${actor} · ${name}</h3>
+                  <p>${text}</p>
+                </div>
+              </div>
+            `,
+          )
+          .join("");
+        apduMetric.textContent = String(steps.length);
+      }
+
+      function buildCommands() {
+        const data = collect();
+        const parsed = validateConfig(data);
+        const host = shellQuote(data.host.trim() || defaults.host);
+        const slaveCommand = [
+          "python3 slave_server.py",
+          `--host ${host}`,
+          `--port ${parsed.port}`,
+          `--slave-id ${parsed.slaveId}`,
+          `--server-id ${shellQuote(data.server_id.trim())}`,
+          `--registers ${parsed.registers.length}`,
+          "--once",
+        ].join(" ");
+        const masterCommand = [
+          "python3 master_server.py",
+          `--host ${host}`,
+          `--port ${parsed.port}`,
+          `--slave-id ${parsed.slaveId}`,
+          `--client-id ${shellQuote(data.client_id.trim())}`,
+          `--start ${parsed.start}`,
+          `--quantity ${parsed.quantity}`,
+        ].join(" ");
+
+        slaveCommandEl.textContent = slaveCommand;
+        masterCommandEl.textContent = masterCommand;
+        modeMetric.textContent = data.mode;
+        summaryEl.textContent = `${parsed.registers.length} 个从站寄存器`;
+        setStatus("命令已生成", "ok");
+      }
+
+      function renderRegisters(rows) {
+        registerRows.innerHTML = rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${row.address}</td>
+                <td>${row.value}</td>
+                <td>${row.hex}</td>
+              </tr>
+            `,
+          )
+          .join("");
+      }
+
+      function simulateRead() {
+        const data = collect();
+        const parsed = validateConfig(data);
+        buildCommands();
+        const rows = parsed.registers.slice(parsed.start, parsed.start + parsed.quantity).map((value, index) => ({
+          address: parsed.start + index,
+          value,
+          hex: `0x${value.toString(16).padStart(4, "0")}`,
+        }));
+        renderRegisters(rows);
+        summaryEl.textContent = `${rows.length} 个寄存器`;
+        setStatus("读取视图已生成", "ok");
+      }
+
+      function showCommand(which) {
+        const slaveActive = which === "slave";
+        slaveTab.classList.toggle("active", slaveActive);
+        masterTab.classList.toggle("active", !slaveActive);
+        slaveCommandEl.classList.toggle("hidden", !slaveActive);
+        masterCommandEl.classList.toggle("hidden", slaveActive);
+      }
+
+      async function copyCurrentCommand() {
+        const current = slaveCommandEl.classList.contains("hidden") ? masterCommandEl.textContent : slaveCommandEl.textContent;
+        if (!current.trim()) {
+          setStatus("请先生成命令", "error");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(current);
+          setStatus("当前命令已复制", "ok");
+        } catch {
+          setStatus("浏览器未允许复制，请手动选择命令", "error");
+        }
+      }
+
+      function resetPage() {
+        Object.entries(defaults).forEach(([name, value]) => {
+          const field = form.elements[name];
+          if (field) field.value = value;
+        });
+        slaveCommandEl.textContent = "";
+        masterCommandEl.textContent = "";
+        registerRows.innerHTML = '<tr><td class="empty" colspan="3">暂无读取结果</td></tr>';
+        summaryEl.textContent = "未生成";
+        modeMetric.textContent = defaults.mode;
+        setStatus("等待操作");
+        showCommand("slave");
+      }
+
+      document.querySelector("#buildCommands").addEventListener("click", () => {
+        try {
+          buildCommands();
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      });
+
+      document.querySelector("#simulateRead").addEventListener("click", () => {
+        try {
+          simulateRead();
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      });
+
+      document.querySelector("#resetPage").addEventListener("click", resetPage);
+      document.querySelector("#copyCommand").addEventListener("click", copyCurrentCommand);
+      slaveTab.addEventListener("click", () => showCommand("slave"));
+      masterTab.addEventListener("click", () => showCommand("master"));
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        simulateRead();
+      });
+
+      renderTimeline();
+      buildCommands();
+    </script>
+  </body>
+</html>

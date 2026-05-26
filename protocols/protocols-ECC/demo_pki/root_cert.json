@@ -1,0 +1,11 @@
+{
+  "body": {
+    "curve": "secp256r1",
+    "issuer_id": "ROOT-DEMO",
+    "public_key": "BBHvoiLYRgGH12NPwuWdk/ZEjVxOXt+YShz5uA7D/IZw14+ETTZEPVET5vnPTpamQvii+/hsb2ekpK5gvrcQg/k=",
+    "subject_id": "ROOT-DEMO",
+    "type": "root",
+    "version": 1
+  },
+  "signature": "MEUCIQDRYIeOrLLby4SN4VZp3SQVMf2HHyXsv/zsMLXoDvhPNwIgYvHdFWHsPRZfDLx/f/RyhLO2DghxsQpOHzbO8YrkZwM="
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modbus 安全扩展主从站演示</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">Modbus 串行链路通信协议安全扩展</p>
+            <h1>主站读取从站保持寄存器示例</h1>
+          </div>
+          <button id="readButton" type="button">读取寄存器</button>
+        </header>
+
+        <form id="readForm" class="layout">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>从站参数</h2>
+              <span>模拟从站单次监听</span>
+            </div>
+            <div class="grid two">
+              <label>
+                监听地址
+                <input name="slave_host" value="127.0.0.1" autocomplete="off" />
+              </label>
+              <label>
+                监听端口
+                <input name="slave_port" value="0" inputmode="numeric" />
+              </label>
+              <label>
+                从站地址
+                <input name="slave_id" value="1" inputmode="numeric" />
+              </label>
+              <label>
+                服务器 ID
+                <input name="server_id" value="0x1001000100000001" autocomplete="off" />
+              </label>
+            </div>
+            <label>
+              共享口令
+              <input name="password" value="modbus-psk-demo" autocomplete="off" />
+            </label>
+            <label>
+              保持寄存器
+              <textarea name="registers" rows="5">10,20,30,40,50,60,70,80,90,100,110,120</textarea>
+            </label>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>主站参数</h2>
+              <span>握手后发起 0x03 读取</span>
+            </div>
+            <div class="grid two">
+              <label>
+                目标地址
+                <input name="master_host" value="127.0.0.1" autocomplete="off" />
+              </label>
+              <label>
+                客户端 ID
+                <input name="client_id" value="0x2001000100000001" autocomplete="off" />
+              </label>
+              <label>
+                起始地址
+                <input name="start" value="0" inputmode="numeric" />
+              </label>
+              <label>
+                读取数量
+                <input name="quantity" value="4" inputmode="numeric" />
+              </label>
+            </div>
+            <div id="status" class="status idle">等待读取</div>
+          </section>
+        </form>
+
+        <section class="results">
+          <div class="panel-heading">
+            <h2>读取结果</h2>
+            <span id="summary">暂无数据</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>寄存器地址</th>
+                  <th>十进制值</th>
+                  <th>十六进制值</th>
+                </tr>
+              </thead>
+              <tbody id="registerRows">
+                <tr>
+                  <td colspan="3" class="empty">提交参数后显示主站读取到的寄存器</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <dl id="sessionDetails" class="details"></dl>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

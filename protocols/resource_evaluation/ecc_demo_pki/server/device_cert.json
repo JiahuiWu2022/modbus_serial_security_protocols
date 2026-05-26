@@ -1,0 +1,11 @@
+{
+  "body": {
+    "curve": "secp256r1",
+    "issuer_id": "BRAND-DEMO",
+    "public_key": "BK1g8kR5ZAtLYukSUYkS3u5XxmEF81MCKhJ55q7HuLfLNrLf5/BvGvZwEXzKx7xLKAjKbtu396pGFHYBm7ADsmw=",
+    "subject_id": "1112131415161718",
+    "type": "server",
+    "version": 1
+  },
+  "signature": "MEUCIQDE3FbGrEZWJBPdXsYkHbk78OfOB+RMZA6/sCgS0OztRgIgF4672Gwm+Tw9/une8frqWbgzeh17B2Po1AAw8IHsHhU="
+}
