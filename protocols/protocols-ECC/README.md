@@ -4,6 +4,8 @@
 
 推荐使用“一命令启动 UI”模式：只在命令行启动 UI 控制台，然后在页面内完成 PKI 准备、从站启动、主站启动和寄存器读写。
 
+If a real UART interface is used in frame.py, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+
 ## 1. 环境准备
 
 进入项目目录：

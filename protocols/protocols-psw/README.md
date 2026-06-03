@@ -4,6 +4,8 @@
 
 示例用 TCP 承载 RTU 帧记录，方便无串口硬件时本地运行；RTU 帧本身仍包含从站地址、功能码和 CRC16。内容加密使用文档列出的 AES-GCM 模式，依赖 `cryptography`。
 
+If a real UART interface is used in modbus_security_psk.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+
 ## 实现内容
 
 - `ss_sk_open_req` / `ss_sk_open_cnf`

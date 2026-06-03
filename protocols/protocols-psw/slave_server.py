@@ -54,6 +54,14 @@ def serve(
     registers: List[int],
     once: bool,
 ) -> None:
+# the socket initialized here is only formal and not actually used if use hardware UART in modbus_security_psk.py.
+    conn = -1
+    try:
+        serve_connection(conn, slave_id, password, server_id, registers)
+    except (EOFError, ProtocolError, ValueError) as exc:
+        print(f"connection error: {exc}", file=sys.stderr, flush=True)    
+"""      
+    #simualation using Socket    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind((host, port))
@@ -70,7 +78,7 @@ def serve(
                     print(f"connection error: {exc}", file=sys.stderr, flush=True)
             if once:
                 return
-
+"""  
 
 def main() -> int:
     parser = endpoint_args("Run a Modbus secure-extension slave station server.")
@@ -82,7 +90,10 @@ def main() -> int:
     if not (1 <= args.slave_id <= 247):
         parser.error("--slave-id must be in 1..247")
     registers = [(i + 1) * 10 for i in range(args.registers)]
-
+    
+    # If a real UART interface is used in modbus_security_pq.by, 
+    # the socket initialized here is only formal and not actually used. 
+    # Every frame read and sent is completed on UART.  
     try:
         serve(
             host=args.host,

@@ -271,7 +271,10 @@ def _read_exact(sock: socket.socket, size: int) -> bytes:
     chunks = []
     remaining = size
     while remaining:
-        chunk = sock.recv(remaining)
+        #simualation using Socket
+        #chunk = sock.recv(remaining)
+        #read the hardware UART.
+        chunk = readUART(remaining)        
         if not chunk:
             raise EOFError("socket closed")
         chunks.append(chunk)
@@ -282,9 +285,11 @@ def _read_exact(sock: socket.socket, size: int) -> bytes:
 def send_record(sock: socket.socket, frame: bytes) -> None:
     if len(frame) > 0xFFFF:
         raise ValueError("record too large")
-    sock.sendall(len(frame).to_bytes(2, "big") + frame)
-
-
+    #simualation using Socket
+    #sock.sendall(len(frame).to_bytes(2, "big") + frame)
+    #write the hardware UART.
+    writeUART(len(frame).to_bytes(2, "big") + frame)
+    
 def recv_record(sock: socket.socket) -> bytes:
     header = _read_exact(sock, 2)
     size = int.from_bytes(header, "big")

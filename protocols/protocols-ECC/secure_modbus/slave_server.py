@@ -75,6 +75,9 @@ def main() -> None:
             conn, peer = server.accept()
             with conn:
                 try:
+                    #If a real UART interface is used in frame.py, 
+                    #the socket initialized here is only formal and not actually used. 
+                    # Every frame read and sent is completed on UART.
                     handle_client(conn, peer, args, bank)
                 except (ProtocolError, OSError) as exc:
                     LOG.warning("connection closed: %s", exc)

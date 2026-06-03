@@ -28,6 +28,25 @@ def run_master(
     start: int,
     quantity: int,
 ) -> None:
+    
+    # the socket initialized here is only formal and not actually used if use hardware UART in modbus_security_psk.py.    
+    sock = -1    
+    context = run_master_handshake(sock, slave_id, password, client_id)
+    print(
+        "handshake ok "
+        f"server_id=0x{context.server_id:016x} mode={context.mode_name} "
+        f"ck={context.keys.ck.hex()} civ={context.keys.civ.hex()}",
+        flush=True,
+    )
+
+    request_pdu = read_holding_registers_pdu(start, quantity)
+    send_record(sock, build_encrypted_data_send(slave_id, context, request_pdu))
+    response_pdu = parse_encrypted_data_send(recv_record(sock), context, expected_slave_id=slave_id)
+    registers = parse_register_response(response_pdu)
+    print(f"read holding registers start={start} quantity={quantity}: {registers}", flush=True)
+    
+"""   
+    #simualation using Socket     
     with socket.create_connection((host, port), timeout=10) as sock:
         context = run_master_handshake(sock, slave_id, password, client_id)
         print(
@@ -42,7 +61,7 @@ def run_master(
         response_pdu = parse_encrypted_data_send(recv_record(sock), context, expected_slave_id=slave_id)
         registers = parse_register_response(response_pdu)
         print(f"read holding registers start={start} quantity={quantity}: {registers}", flush=True)
-
+""" 
 
 def main() -> int:
     parser = endpoint_args("Run a Modbus secure-extension master station endpoint.")

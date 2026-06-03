@@ -66,7 +66,10 @@ def recv_exact(sock: socket.socket, length: int) -> bytes:
     chunks = []
     remaining = length
     while remaining:
-        chunk = sock.recv(remaining)
+        #simualation using Socket
+        #chunk = sock.recv(remaining)
+        #read the hardware UART.
+        chunk = readUART(remaining)
         if not chunk:
             raise ProtocolError("connection closed")
         chunks.append(chunk)
@@ -80,7 +83,10 @@ def recv_packet(sock: socket.socket) -> bytes:
 
 
 def send_secure_apdu(sock: socket.socket, address: int, tag: int, payload: bytes = b"") -> None:
-    send_packet(sock, build_rtu_frame(address, SECURE_FUNCTION_CODE, build_apdu(tag, payload)))
+    #simualation using Socket
+    #send_packet(sock, build_rtu_frame(address, SECURE_FUNCTION_CODE, build_apdu(tag, payload)))
+    #write the hardware UART.
+    writeUART(build_rtu_frame(address, SECURE_FUNCTION_CODE, build_apdu(tag, payload)))
 
 
 def recv_secure_apdu(sock: socket.socket, expected_address: int | None = None) -> tuple[int, int, bytes]:

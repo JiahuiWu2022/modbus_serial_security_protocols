@@ -549,7 +549,9 @@ def main() -> None:
     LOG.info("HTTP control server listening on http://%s:%s", args.http_host, args.http_port)
     LOG.info("read example: curl 'http://%s:%s/read?start=0&qty=4'", args.http_host, args.http_port)
     server.serve_forever()
-
+    #If a real UART interface is used in frame.py, 
+    #the socket initialized here is only formal and not actually used. 
+    # Every frame read and sent is completed on UART.
 
 if __name__ == "__main__":
     main()

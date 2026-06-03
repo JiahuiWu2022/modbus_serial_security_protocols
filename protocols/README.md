@@ -8,6 +8,8 @@
 
 根目录提供统一启动器 `unified_server.py`。它会同时启动三个子项目的 Web UI，并提供一个带三个标签页的统一入口。
 
+If a real UART interface is used, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+
 ## 安装依赖
 
 ```bash

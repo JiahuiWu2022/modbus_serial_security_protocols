@@ -6,6 +6,8 @@
 
 说明：当前 Python 依赖没有生产级 ML-KEM-768 / ML-DSA-44 实现，6.4 模块使用演示 KEM 与 Ed25519 演示证书链来保持 APDU 字段、密文长度、共享密钥长度和派生公式与文档一致。生产环境需要替换为合规的 ML-KEM/ML-DSA/X.509/HSM 实现。
 
+If a real UART interface is used in modbus_security_pq.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+
 ## 实现内容
 
 - `ss_open_req` / `ss_open_cnf`
