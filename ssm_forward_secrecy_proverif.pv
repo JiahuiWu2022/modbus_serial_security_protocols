@@ -1,0 +1,151 @@
+(* Forward-secrecy model for the SSM management-plane profiles in
+   X.MBSL-sec-v1.1 Sections 9.2, 9.3, and 9.4.
+
+   Run with:
+     proverif formal/ssm_forward_secrecy_proverif.pv
+
+   Interpretation:
+   - ECC_PKI is modeled as signature-authenticated ephemeral DH.
+   - HYBRID_PQ is modeled as signature-authenticated ephemeral KEM.
+   - PSK_PW is modeled as a shared-secret profile.
+   Phase 1 releases long-term signing keys and the PSK. Thus the ECC and
+   Hybrid-PQ witness queries should remain secret, while the PSK witness query
+   is expected to fail and gives the usual "no forward secrecy for PSK-only"
+   result.
+*)
+
+type profile.
+type skey.
+type pkey.
+type key.
+type exponent.
+type group.
+type kemsk.
+type kempub.
+
+free net: channel.
+
+free ECC_PKI: profile.
+free PSK_PW: profile.
+free HYBRID_PQ: profile.
+free ClientID: bitstring.
+free ServerID: bitstring.
+
+free fs_secret_ecc: bitstring [private].
+free fs_secret_pq: bitstring [private].
+free nofs_secret_psk: bitstring [private].
+
+free skClient: skey [private].
+free skServer: skey [private].
+free psk: key [private].
+
+const g: group.
+
+fun pk(skey): pkey.
+fun sign(bitstring, skey): bitstring.
+reduc forall m: bitstring, k: skey; checksign(sign(m, k), pk(k)) = m.
+
+fun exp(group, exponent): group.
+equation forall x: exponent, y: exponent; exp(exp(g, x), y) = exp(exp(g, y), x).
+
+fun kem_pk(kemsk): kempub.
+fun kemenc(bitstring, kempub): bitstring.
+reduc forall ss: bitstring, ks: kemsk; kemdec(kemenc(ss, kem_pk(ks)), ks) = ss.
+
+fun mac(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; checkmac(mac(m, k), m, k) = m.
+
+fun ssm_symenc(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; ssm_symdec(ssm_symenc(m, k), k) = m.
+
+fun transcript_dh(profile, bitstring, bitstring, bitstring, bitstring, group, group): bitstring.
+fun transcript_kem(profile, bitstring, bitstring, bitstring, kempub): bitstring.
+fun transcript_psk(profile, bitstring, bitstring, bitstring, bitstring): bitstring.
+
+fun kdf_dh(group, bitstring): key.
+fun kdf_kem(bitstring, bitstring): key.
+fun kdf_psk(key, bitstring): key.
+
+event ecc_fs_session(bitstring, bitstring).
+event pq_fs_session(bitstring, bitstring).
+event psk_session(bitstring, bitstring).
+
+query attacker(fs_secret_ecc).
+query attacker(fs_secret_pq).
+query attacker(nofs_secret_psk).
+
+let ecc_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  new x: exponent;
+  let X = exp(g, x) in
+  out(net, (ECC_PKI, sid, ClientID, nC, X));
+  in(net, (=ECC_PKI, =sid, =ServerID, nS: bitstring, Y: group, sigS: bitstring));
+  let th = transcript_dh(ECC_PKI, ClientID, ServerID, nC, nS, X, Y) in
+  let (=th) = checksign(sigS, pk(skServer)) in
+  out(net, (ECC_PKI, sid, sign(th, skClient)));
+  let ck = kdf_dh(exp(Y, x), th) in
+  event ecc_fs_session(sid, th);
+  out(net, (ECC_PKI, sid, ssm_symenc(fs_secret_ecc, ck))).
+
+let ecc_server =
+  in(net, (=ECC_PKI, sid: bitstring, =ClientID, nC: bitstring, X: group));
+  new nS: bitstring;
+  new y: exponent;
+  let Y = exp(g, y) in
+  let th = transcript_dh(ECC_PKI, ClientID, ServerID, nC, nS, X, Y) in
+  out(net, (ECC_PKI, sid, ServerID, nS, Y, sign(th, skServer)));
+  in(net, (=ECC_PKI, =sid, sigC: bitstring));
+  let (=th) = checksign(sigC, pk(skClient)) in
+  0.
+
+let pq_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  out(net, (HYBRID_PQ, sid, ClientID, nC));
+  in(net, (=HYBRID_PQ, =sid, =ServerID, pkK: kempub, sigS: bitstring));
+  let th = transcript_kem(HYBRID_PQ, ClientID, ServerID, sid, pkK) in
+  let (=th) = checksign(sigS, pk(skServer)) in
+  new ss: bitstring;
+  out(net, (HYBRID_PQ, sid, kemenc(ss, pkK), sign(th, skClient)));
+  let ck = kdf_kem(ss, th) in
+  event pq_fs_session(sid, th);
+  out(net, (HYBRID_PQ, sid, ssm_symenc(fs_secret_pq, ck))).
+
+let pq_server =
+  in(net, (=HYBRID_PQ, sid: bitstring, =ClientID, nC: bitstring));
+  new ks: kemsk;
+  let pkK = kem_pk(ks) in
+  let th = transcript_kem(HYBRID_PQ, ClientID, ServerID, sid, pkK) in
+  out(net, (HYBRID_PQ, sid, ServerID, pkK, sign(th, skServer)));
+  in(net, (=HYBRID_PQ, =sid, ct: bitstring, sigC: bitstring));
+  let (=th) = checksign(sigC, pk(skClient)) in
+  let ss = kemdec(ct, ks) in
+  let ck = kdf_kem(ss, th) in
+  0.
+
+let psk_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  out(net, (PSK_PW, sid, ClientID, nC));
+  in(net, (=PSK_PW, =sid, =ServerID, nS: bitstring, finS: bitstring));
+  let th = transcript_psk(PSK_PW, ClientID, ServerID, nC, nS) in
+  if checkmac(finS, (PSK_PW, sid, th, ServerID), psk) = (PSK_PW, sid, th, ServerID) then
+    let ck = kdf_psk(psk, th) in
+    event psk_session(sid, th);
+    out(net, (PSK_PW, sid, ssm_symenc(nofs_secret_psk, ck))).
+
+let psk_server =
+  in(net, (=PSK_PW, sid: bitstring, =ClientID, nC: bitstring));
+  new nS: bitstring;
+  let th = transcript_psk(PSK_PW, ClientID, ServerID, nC, nS) in
+  out(net, (PSK_PW, sid, ServerID, nS, mac((PSK_PW, sid, th, ServerID), psk))).
+
+process
+  (!ecc_client | !ecc_server |
+   !pq_client | !pq_server |
+   !psk_client | !psk_server |
+   phase 1;
+   out(net, skClient);
+   out(net, skServer);
+   out(net, psk))

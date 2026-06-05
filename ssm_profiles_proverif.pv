@@ -1,0 +1,188 @@
+(* Abstract ProVerif model for the SSM management-plane profiles in
+   X.MBSL-sec-v1.1 Sections 9.2, 9.3, and 9.4.
+
+   This model is intentionally symbolic. It does not prove SM2, SM3, ML-KEM,
+   ML-DSA, AES-GCM, SM4-GCM, ZUC, or ChaCha20-Poly1305 themselves. Instead it
+   treats mature cryptographic components as ideal constructors and checks the
+   SSM protocol obligations: profile-authenticated setup, SAC/content-key
+   installation before protected PDU transfer, replay state, and separation of
+   the user-replaceable management plane from the common data plane.
+
+   Run with:
+     proverif formal/ssm_profiles_proverif.pv
+*)
+
+type profile.
+type skey.
+type pkey.
+type key.
+
+free net: channel.
+
+free ECC_PKI: profile.
+free PSK_PW: profile.
+free HYBRID_PQ: profile.
+
+free ClientID: bitstring.
+free ServerID: bitstring.
+free secret_ecc: bitstring [private].
+free secret_psk: bitstring [private].
+free secret_pq: bitstring [private].
+
+free skClient: skey [private].
+free skServer: skey [private].
+free psk: key [private].
+
+fun pk(skey): pkey.
+
+fun ssm_pubenc(bitstring, pkey): bitstring.
+reduc forall m: bitstring, k: skey; ssm_pubdec(ssm_pubenc(m, pk(k)), k) = m.
+
+fun sign(bitstring, skey): bitstring.
+reduc forall m: bitstring, k: skey; checksign(sign(m, k), pk(k)) = m.
+
+fun ssm_symenc(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; ssm_symdec(ssm_symenc(m, k), k) = m.
+
+fun mac(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; checkmac(mac(m, k), m, k) = m.
+
+fun transcript(profile, bitstring, bitstring, bitstring, bitstring): bitstring.
+fun kdf_sac(bitstring, bitstring): key.
+fun kdf_ck(bitstring, bitstring): key.
+fun kdf_psk(key, bitstring): bitstring.
+
+table seen(profile, bitstring, bitstring).
+
+event begin_client(profile, bitstring, bitstring, bitstring, bitstring).
+event end_client(profile, bitstring, bitstring, bitstring, bitstring).
+event begin_server(profile, bitstring, bitstring, bitstring, bitstring).
+event end_server(profile, bitstring, bitstring, bitstring, bitstring).
+event sac_ready(profile, bitstring, bitstring).
+event content_ready(profile, bitstring, bitstring).
+event send_pdu(profile, bitstring, bitstring, bitstring).
+event accept_pdu(profile, bitstring, bitstring, bitstring).
+event session_key(profile, bitstring, key).
+
+query p: profile, sid: bitstring, th: bitstring, c: bitstring, s: bitstring;
+  inj-event(end_server(p, sid, th, c, s)) ==> inj-event(begin_client(p, sid, th, c, s)).
+
+query p: profile, sid: bitstring, th: bitstring, c: bitstring, s: bitstring;
+  inj-event(end_client(p, sid, th, c, s)) ==> inj-event(begin_server(p, sid, th, c, s)).
+
+query p: profile, sid: bitstring, ctr: bitstring, pdu: bitstring;
+  inj-event(accept_pdu(p, sid, ctr, pdu)) ==> inj-event(send_pdu(p, sid, ctr, pdu)).
+
+query attacker(secret_ecc).
+query attacker(secret_psk).
+query attacker(secret_pq).
+
+let common_data_plane(p: profile, sid: bitstring, th: bitstring, ck: key, marker: bitstring) =
+  event sac_ready(p, sid, th);
+  event content_ready(p, sid, th);
+  event session_key(p, sid, ck);
+  out(net, (p, sid, ssm_symenc(marker, ck)));
+  new ctr: bitstring;
+  new pdu: bitstring;
+  let ct = ssm_symenc(pdu, ck) in
+  let tag = mac((p, sid, th, ctr, ct), ck) in
+  event send_pdu(p, sid, ctr, pdu);
+  out(net, (p, sid, ctr, ct, tag)).
+
+let common_data_receiver(p: profile, sid: bitstring, th: bitstring, ck: key) =
+  in(net, (=p, =sid, ctr: bitstring, ct: bitstring, tag: bitstring));
+  if checkmac(tag, (p, sid, th, ctr, ct), ck) = (p, sid, th, ctr, ct) then
+    get seen(=p, =sid, =ctr) in 0 else
+      insert seen(p, sid, ctr);
+      let pdu = ssm_symdec(ct, ck) in
+      event accept_pdu(p, sid, ctr, pdu).
+
+let ecc_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  out(net, (ECC_PKI, sid, ClientID, nC));
+  in(net, (=ECC_PKI, =sid, =ServerID, nS: bitstring, sigS: bitstring));
+  let th = transcript(ECC_PKI, ClientID, ServerID, nC, nS) in
+  let (=th) = checksign(sigS, pk(skServer)) in
+  event begin_client(ECC_PKI, sid, th, ClientID, ServerID);
+  new ms: bitstring;
+  out(net, (ssm_pubenc((ECC_PKI, sid, th, ms), pk(skServer)), sign(th, skClient)));
+  in(net, (=ECC_PKI, =sid, finS: bitstring));
+  let ck = kdf_ck(ms, th) in
+  if checkmac(finS, (ECC_PKI, sid, th, ServerID), kdf_sac(ms, th)) = (ECC_PKI, sid, th, ServerID) then
+    event end_client(ECC_PKI, sid, th, ClientID, ServerID);
+    common_data_plane(ECC_PKI, sid, th, ck, secret_ecc).
+
+let ecc_server =
+  in(net, (=ECC_PKI, sid: bitstring, =ClientID, nC: bitstring));
+  new nS: bitstring;
+  let th = transcript(ECC_PKI, ClientID, ServerID, nC, nS) in
+  out(net, (ECC_PKI, sid, ServerID, nS, sign(th, skServer)));
+  in(net, (box: bitstring, sigC: bitstring));
+  let (=ECC_PKI, =sid, =th, ms: bitstring) = ssm_pubdec(box, skServer) in
+  let (=th) = checksign(sigC, pk(skClient)) in
+  event begin_server(ECC_PKI, sid, th, ClientID, ServerID);
+  out(net, (ECC_PKI, sid, mac((ECC_PKI, sid, th, ServerID), kdf_sac(ms, th))));
+  event end_server(ECC_PKI, sid, th, ClientID, ServerID);
+  common_data_receiver(ECC_PKI, sid, th, kdf_ck(ms, th)).
+
+let psk_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  out(net, (PSK_PW, sid, ClientID, nC));
+  in(net, (=PSK_PW, =sid, =ServerID, nS: bitstring));
+  let th = transcript(PSK_PW, ClientID, ServerID, nC, nS) in
+  let ms = kdf_psk(psk, th) in
+  event begin_client(PSK_PW, sid, th, ClientID, ServerID);
+  out(net, (PSK_PW, sid, mac((PSK_PW, sid, th, ClientID), psk)));
+  in(net, (=PSK_PW, =sid, finS: bitstring));
+  if checkmac(finS, (PSK_PW, sid, th, ServerID), psk) = (PSK_PW, sid, th, ServerID) then
+    event end_client(PSK_PW, sid, th, ClientID, ServerID);
+    common_data_plane(PSK_PW, sid, th, kdf_ck(ms, th), secret_psk).
+
+let psk_server =
+  in(net, (=PSK_PW, sid: bitstring, =ClientID, nC: bitstring));
+  new nS: bitstring;
+  out(net, (PSK_PW, sid, ServerID, nS));
+  let th = transcript(PSK_PW, ClientID, ServerID, nC, nS) in
+  in(net, (=PSK_PW, =sid, authC: bitstring));
+  if checkmac(authC, (PSK_PW, sid, th, ClientID), psk) = (PSK_PW, sid, th, ClientID) then
+    let ms = kdf_psk(psk, th) in
+    event begin_server(PSK_PW, sid, th, ClientID, ServerID);
+    out(net, (PSK_PW, sid, mac((PSK_PW, sid, th, ServerID), psk)));
+    event end_server(PSK_PW, sid, th, ClientID, ServerID);
+    common_data_receiver(PSK_PW, sid, th, kdf_ck(ms, th)).
+
+let pq_client =
+  new sid: bitstring;
+  new nC: bitstring;
+  out(net, (HYBRID_PQ, sid, ClientID, nC));
+  in(net, (=HYBRID_PQ, =sid, =ServerID, nS: bitstring, sigS: bitstring));
+  let th = transcript(HYBRID_PQ, ClientID, ServerID, nC, nS) in
+  let (=th) = checksign(sigS, pk(skServer)) in
+  event begin_client(HYBRID_PQ, sid, th, ClientID, ServerID);
+  new kemsk: bitstring;
+  out(net, (ssm_pubenc((HYBRID_PQ, sid, th, kemsk), pk(skServer)), sign(th, skClient)));
+  in(net, (=HYBRID_PQ, =sid, akm: bitstring));
+  let ck = kdf_ck(kemsk, th) in
+  if checkmac(akm, (HYBRID_PQ, sid, th, ServerID), kdf_sac(kemsk, th)) = (HYBRID_PQ, sid, th, ServerID) then
+    event end_client(HYBRID_PQ, sid, th, ClientID, ServerID);
+    common_data_plane(HYBRID_PQ, sid, th, ck, secret_pq).
+
+let pq_server =
+  in(net, (=HYBRID_PQ, sid: bitstring, =ClientID, nC: bitstring));
+  new nS: bitstring;
+  let th = transcript(HYBRID_PQ, ClientID, ServerID, nC, nS) in
+  out(net, (HYBRID_PQ, sid, ServerID, nS, sign(th, skServer)));
+  in(net, (box: bitstring, sigC: bitstring));
+  let (=HYBRID_PQ, =sid, =th, kemsk: bitstring) = ssm_pubdec(box, skServer) in
+  let (=th) = checksign(sigC, pk(skClient)) in
+  event begin_server(HYBRID_PQ, sid, th, ClientID, ServerID);
+  out(net, (HYBRID_PQ, sid, mac((HYBRID_PQ, sid, th, ServerID), kdf_sac(kemsk, th))));
+  event end_server(HYBRID_PQ, sid, th, ClientID, ServerID);
+  common_data_receiver(HYBRID_PQ, sid, th, kdf_ck(kemsk, th)).
+
+process
+  (!ecc_client | !ecc_server |
+   !psk_client | !psk_server |
+   !pq_client | !pq_server)
