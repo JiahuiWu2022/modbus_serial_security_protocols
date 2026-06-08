@@ -48,7 +48,7 @@ class PostQuantumProtocolTests(unittest.TestCase):
         self.assertEqual(decoded_payload.send[TYPE_MODE], bytes([MODE_AES_GCM]))
         self.assertEqual(decoded_payload.request, (TYPE_KEM_C,))
 
-    def test_demo_certificate_chain_verifies_device_identity(self):
+    def test_ml_dsa_certificate_chain_verifies_device_identity(self):
         material = make_device_material("server", 0x1001000100000001)
         device_id, kem_public, cert = verify_device_certificate(
             material.device_cert,
@@ -58,6 +58,8 @@ class PostQuantumProtocolTests(unittest.TestCase):
 
         self.assertEqual(device_id, 0x1001000100000001)
         self.assertEqual(kem_public, material.kem_public)
+        self.assertEqual(len(kem_public), 1184)
+        self.assertEqual(cert["algorithm"], "ML-DSA-44")
         self.assertIn("broadcast_ml_kem_public_key", cert)
 
     def test_pq_key_derivation_matches_document_formula(self):

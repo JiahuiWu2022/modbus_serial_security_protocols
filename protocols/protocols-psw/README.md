@@ -2,7 +2,7 @@
 
 本项目实现《Modbus串行链路通信协议安全扩展技术要求》6.3 节描述的“基于口令或预共享密钥”的主从站参考端点，并提供命令行端点和浏览器界面。
 
-示例用 TCP 承载 RTU 帧记录，方便无串口硬件时本地运行；RTU 帧本身仍包含从站地址、功能码和 CRC16。内容加密使用文档列出的 AES-GCM 模式，依赖 `cryptography`。
+RTU 帧本身包含从站地址、功能码和 CRC16。内容加密使用文档列出的 AES-GCM 模式，依赖 `cryptography`。
 
 If a real UART interface is used in modbus_security_psk.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
 
@@ -241,6 +241,3 @@ python3 -m pip install -r requirements.txt
 
 `起始地址 + 读取数量` 不能超过页面中配置的保持寄存器数量。
 
-## 主要限制
-
-这是协议参考实现，不是生产级串口驱动。真实 RS-485/RS-232 部署需要把 `send_record` / `recv_record` 替换为串口收发和串行链路定界逻辑，并把口令、派生中间态、会话密钥放入设备可信执行环境或安全存储中。

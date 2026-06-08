@@ -10,12 +10,11 @@ The protocol flow follows section 6.4 of the supplied technical requirement:
 * CK/CIV and BCK/BCIV derivation
 * encrypted Modbus function-code+data transport through ss_data_send
 
-This is a runnable reference endpoint. Python's standard cryptography stack
-does not currently provide ML-KEM-768 and ML-DSA-44 primitives, so this module
-uses a small deterministic demo KEM and Ed25519-backed demo certificates while
-preserving the APDU fields, ciphertext length, key sizes, and derivation
-formulas from the document. Replace DemoMlKem768 and the demo certificate
-builder/verifier with certified ML-KEM/ML-DSA/X.509 code before production use.
+This is a runnable reference endpoint. It uses pqcrypto's ML-KEM-768 and
+ML-DSA-44 primitives for key encapsulation and certificate-chain signatures
+while keeping the compact JSON certificate container used by this reference
+implementation. Replace the built-in test trust anchor with real X.509/HSM or
+device-secure-storage integration before production use.
 """
 
 from __future__ import annotations
@@ -25,13 +24,12 @@ import base64
 import dataclasses
 import hmac
 import json
-import os
 import socket
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from pqcrypto.kem import ml_kem_768
+from pqcrypto.sign import ml_dsa_44
 
 
 class ProtocolError(Exception):
@@ -289,7 +287,8 @@ def send_record(sock: socket.socket, frame: bytes) -> None:
     #sock.sendall(len(frame).to_bytes(2, "big") + frame)
     #write the hardware UART.
     writeUART(len(frame).to_bytes(2, "big") + frame)
-    
+
+
 def recv_record(sock: socket.socket) -> bytes:
     header = _read_exact(sock, 2)
     size = int.from_bytes(header, "big")
@@ -379,12 +378,144 @@ MODE_NAMES = {
     MODE_AES_GCM: "aes_gcm",
 }
 
-ML_KEM_768_CIPHERTEXT_BYTES = 1088
-ML_KEM_SHARED_SECRET_BYTES = 32
+ML_KEM_768_CIPHERTEXT_BYTES = ml_kem_768.CIPHERTEXT_SIZE
+ML_KEM_SHARED_SECRET_BYTES = ml_kem_768.PLAINTEXT_SIZE
+ML_KEM_768_PUBLIC_KEY_BYTES = ml_kem_768.PUBLIC_KEY_SIZE
+ML_KEM_768_SECRET_KEY_BYTES = ml_kem_768.SECRET_KEY_SIZE
+ML_DSA_44_PUBLIC_KEY_BYTES = ml_dsa_44.PUBLIC_KEY_SIZE
+ML_DSA_44_SECRET_KEY_BYTES = ml_dsa_44.SECRET_KEY_SIZE
 
-_ROOT_SIGNING_SEED = bytes.fromhex("01" * 32)
-_BRAND_SIGNING_SEED = bytes.fromhex("02" * 32)
-_BROADCAST_KEM_SECRET = sm3(b"modbus-6.4-demo-broadcast-ml-kem-private")
+
+def _decode_b64_blob(data: str) -> bytes:
+    return base64.b64decode("".join(data.split()).encode("ascii"), validate=True)
+
+
+_ROOT_ML_DSA_44_PUBLIC = _decode_b64_blob("""
+vY22AexTM7an2voI/fPPIr39erni/mqTp4FzAiZXig1pUSeAeV8RtssoTt2YckVFE+306NX3YGuk3HRE/9lF41BD
+EiRyndZ+o6vdE3jvKp10A3bOSEISzzHcq45N06GrHBWZ24WxFq7/eGswl/8QF51oa5hhyUFDdKUqe2z/k5A5o3yW
+kCEmeqUYaapNgxQaUxHLxUXSyHLikHvBkNexaFCOnH2h6Z6BYyGjgb3lnJrHxvRUiEkI2qpbIFmBah+q+uFycu7X
+/DsSIwQhd59YlgQDv4XNLyqhLGQNG0lStmSgOrXWJpWvtFO5tHAD7lrPoJcTXNOtR2xHGmYImV5jpz3bbfyNhYC/
+KSsVw9EExg2Vg3opGo1vLrTKvyBS/cr9Xbply1XZHEznqzxD6nnT1Fe1PRDp3Vezgqq6X6/l4oS24HwPULDiKguC
+kTiRHYGYLIu/Km9HTLfRaAnKLX1csyZIPXVcJNWjRKeOr6Tk9cap9LQBBcK3stL31JzzPyQ6ipMZTFV8vAYBR2vS
+6hP6OjvFnWhxoEdqWq+D/dkGGY1JUhz+lz567Ls71041FyZMt+Xgegf0pr19toNFe9QFCDUZzTJi4FAHwtwIKmMX
+LkFXntE+xE989AkjVpFCEC+LhT/DF3FOqq9oetwtEhN3fpYTEhtb19cibV4zHzlJol+XfOKF0p8qQv/z4nBL5iKw
+Mj6SH2De8AqWWge84pTHKMETwcacT9sgjlGQ7X81+mmh2rDSZyUdlHor6hZ2V1UnH1PAE/1adbviOUToBHmCU+Ln
+5EGT8coeB3wH7sVcH/fhAUypOvq1vTuBaBX32USrvnDglf6b1bzX8dGAcPOSV0Md7T/HjjrVVE1RlGsonnfu9he+
+dhsHmgmLkVeuXCmM1pMwpbuly/A47UTgu4nV5UkomA3RkD95nW1H2N0FnxN9A9YzG2djpOjukx13t1JR1TybN/SX
+55baiaZyx3Y4oWQ/0oqukm3oqkhL7TdQ0WZa+z4nncT/ipl/6uQY6EFGiFlyKx7MOPhp22EjxMIyUIVaGpIKJ6BR
+K3LvioT187wEkUg7wUPo197kGj2EC6uCnnly12Tsho1Izjaiiuk1GhSUbuSVv5VtWDfocbYUIsPOLbjeU1fdm8yZ
+8tW6XyWno7x4GrIhELareEHcGWTloFvUjKPdVERz6VM1eOQH/8NiQVuLUdJyg0+XVxzoC3gr5bo0Z43nkjYeSP7W
+tliDOSV/dRO5pIgkxa0HZB8prNbUBPOFFcw3HDumG38EQtgmS7jEqLxNG0F5ZM944sLtBUXrARGHI/760ElRQkCt
+GekDByswdkBrd1z3A2hOwqTliRQizNlKIF26xnFLZSKfsjmRUdrifWtOUt/4NvIqZEw+F6WsglTKif01qoVgDw22
+SzH5wFpaWEUM1MVmGSmBgD3jRh2un4VZf2+btMmhONsjr+kM6xv9kswwE2AW7WKkVxpNa2AivshcFVWSMp0nTOut
+DQMNfkEA+28ctQWzQ1wcQj0W9X2MYZuh2+lxU/9WdrStq88H/zrqltXV+tw3OaCsrsnxuT2nodaOO9MaOabTJZOp
+KTvpjhTA7/ddU63by+MxaxkzS8N4j47fBmap/qGDn2G1qiCTjKOvCLFBAjBJX3KYtuOt5kD/Mv4w9d1RGvhWIaLK
+1a9L1p3L1cwYDa/qAFifLrr4vtjKvzVhbRsrqmvnFlowCPmfb6b05G7ekjTX+Qtupp7/ti82oU1v/Q==
+""")
+_ROOT_ML_DSA_44_SECRET = _decode_b64_blob("""
+vY22AexTM7an2voI/fPPIr39erni/mqTp4FzAiZXig1jC7VGfxgDJDCB9VZoBFKgeNknWsrOoXiwFDBnI8lDIvzv
+YNfqiPryn2lklplSFvi2sFwaCyoH11DFrkBI63yyg5ikQy6iVbqK61iywlQklLGqlRqCHc0fO9mUU2hfFdqDRA1h
+NJGUKGrTpG1ZOCEkIyWgMmEiGSUMOY7CQCASCIIjE20AgSUhIWjhFGYMhAAMxoEUhEUEwQ2UkHAKAxEgl4kLNUIR
+JwyDoAwIAZJKpm1ZICGgtIkaMkBiNE7kACVkiEFAJABREgaZtGlRkiCIRi2BEmCJBmIACY0AGWTYooyLOALhRDJM
+NHIDmQBCsAwSEi0jEIkbkQFKtg3UBhLJEg3YQIgLImEAESnCEAAix2zckFHEJAgTiEnUyAgCyYBBSEkKRlDQMiyA
+BmpKCGxaQCWCOHKDJJGJFg0gAELEFg1JAADJNpBDFozcRizLCEyTAC3LQG1kGHEbsihaNAYKEY5gMo7RsAzLgATI
+FkEaAmSQNEiSRk5QyCgaSVBDkmmIFkzCpBAclE0agjAJxEkbJTAbpC2YNEKZiFHIwgQcxGVRgowQuCkIMIyZolBK
+MkICllBYlDCMlmhhRmkIQCkZCCJhmEGZMixjIA2hkkhhuJDUwAHCqC0gkQGSxmDASBEEgigZIpABI0AME03KCITA
+SEbQEo7IlpHTtGhgNoSkNCAag0hYiEyCSIFBMIahgABMgmTBsk1AImHhQjDcwmEaAoUUGXCcmCGQSImkkFAbREoc
+MWUIIZEQh3CKRJCYAo7gtkUcQpGgBHBkoAhcJGpKNikchWHUJo7BQmbEIiHjICEMEzJMBJAbQYYQh2wDGQABNmAh
+MjCIQADkAoJbFGgkIHERuAQbBRJiCIXUxoCgokDJgI2DsijbJHEJpowKInATCWnANGUKE3KaEiHUAm5hBAAZkJEM
+AmYTmIEKR0FEQmTRuARaMAraQiSUQDIDEA5IyEwgqA2IFAYatIiSKCYCMA6TMmiEOGECiQALuSXSFjBERDGjogkc
+RHHiRpEEBkUjOVHaoJAAwAmDEEYLkInYmDHJBmgahYALwlDjqEDisCEgEWQkBU5IkogESS2jBoAYBzLkBoQRJ3HD
+gkVEsohImJERmEhREmwaoSyiECHAIFBcyCSEFmEgMSbYOA1YMgqaWi3d1gBFYBQ31M4j3G8uNSvXnMDj6jxkj/+U
+hr6YS3w0cSBe7dPPU348iB/ODESynveZHqDcQRbx9rk2HoeDy8sNWibOHOtNgBIoJSYKYXHHagvvdlqp53MnZA2G
+C5WReAKEfgYW1aI1cs6qAaMOqitFw23bY0BYdwRzzmjrPoRqUVGy9ffJ4bX9M4Zg7PrBWyIB64cSRvUXruEhO/D/
+V7nZsvzvy0SOCLo4fed0ZSZRhF5hK+YadergOAbwF1ZNmio2qe2DMy3M00qsI5ETO/1ZcaKG0Z6Pvo6lJWWW5VeI
+amX1LrQR6k6+8Cs664mpn53CX/yIJeVLgVIIBbuPPgDQoEHSca9M2eScozDF5c0MQ4OuerZBkuKGzhKfTDmBpKie
+53eeanbRLQ6ZKJUK0wxWuOn4/f9e8lVK/1ox2dB8QBxGreOaX9yE9JO/gtb7eL2d/Z4ncziBvH91hcnNGhV8hbHm
+PDp/I3VNkqseqbauIXloH760TLliET7FRpDod7tnatLZ21GastcIUsQ3f8Z/3+Y2djNHmBp36vegAufoD5fHIWIF
+98PUCBLysH2VuwwoIduSFiL8QC3hfXpymekSaNbOeGfpOHN4/7OW0LvQr9boqbILb0e2bwySqXdNGYJnma3bWs7X
+r2GVuscGHFueOIuCONvdCdarKPQHnlxCkVJtqodw2dLRLPrAKzvyaYlAA9Z9cvahVImYEx3ws2hgWpBicVhTda6k
+EPDkB2+mFfUwPPh+909bTgZyvlEoNr3y7sjS9n7CD1vEzqSFDLDG7faQ4DsWqSLSOatGWjxAk9I8I0itHl7I7JWw
+32RY2OmoByWX8X0xOdEf0SRlydB09I835eGCbsl5bkXmk00Eor7Ry7/379/SafyXMscCtSSL/5xBwTvg9qtrQ9ri
+29FndyUOEBLFZMQ60pswHdl36jsyoNmlCWnRpS05LdvPORQIPITjg266OcTwgRpLuXWMlIr0NM6JACufl0iG0l5e
+fl2RZEBw+Ycn6xIIktPL0DYZd2raFF1+Ng2lQEhcozo0w51mfXWQLMY3StiIb+5Yktl8jFiP/IkPYGJPyDUF6Igr
+jYM9efPBQUDrPz+X7Z4AvAwJ/X8xiTLGqH0glrXgE2DbSGZQzaaxZuIBGzAYk7fb9wd8h8DwVm2vsyl67r34/RLb
+30KSxJAhnLhx1LdqpeFYWo8MhPRCMyf+7V+ngYhbGRuHQ3DxX1KgQ3VLsgdwKG4kC5L2jbh3qfJLsAk35RvOC1JB
+/FKyp/PAnJNMsvQFfY96djq2bWPCxpjC3+GY4Vq1f0KCNdPpcAEgKK8WGQXByyfXrO9srLLJs4g2g8XgVPt+uCrz
+lK1Ib58f663PtnyeULzc0G1CLfS04r6B9oJ2etivQQczGD8jmPJhfY35GjfRtwXPbKcNetQeJsNZl/nGYd1Qmj5s
+desSrKz2v8AxplYzo5BGw5r8NyacyrqShdLL8ZYplOoOz7LYcDWuPQBZrsSt7ih0okR+KyWfiHpG/q7OZ73Oo/rE
+AiwR3bfku7SbutQKbBhi7NDQ3ktEEc/TY523+gy5kJArqtfb0UWswEh6Hl5gRwZsAgQZBcAWwqwx/pGW/OqhSXMo
+5LneQ4xig3FtgKE/h1Jgo2P3cqDgDaEK7C8WCKbXqUq1Jg5ACXj+e6aFQhpeXSIo/4fQ66LN/00IlpcSYw5OLIOu
+i76qmTCBcinvJeBfSH8sYkEKig+D0rF3a/WKiuJ8KVBZLIbp8OoIw0yt+DpN0TF3Qi15q6vUfewne+o6lNK/d2TD
++q40KQWVYUl0/dcAadRRTc4T/bjv6AKaN6vNJlUfgIfmOuisQoKpEXby4+JLKmyGsHygS3lcD7Vy4L0yh4b7NaTt
+TvcxiSHUfRbTHSErzghcDFnyS6hVRxtRl8Q1w4nTgd8XdVK53/S4m9N8KKRXSTrISgt+HFoGAslorNbtFYbeihE1
+xgVOL5Mom0NXR0BsaoCVR8+bVQYZ0ZHIWOuRWIMneWZ/mQsRKIsVGmYdG2NQgKb52PcRTOZ+akWrVj1lyjj3Vvxl
+hkHBJpK6H1OT9XpYiYtjsSyzSsP+Bzh7cNERILIVdc9JzwSQaw8lKIh7s6RSf6gU1ybD0tZfovRq0ZpLyXmAXXBd
+/ZBDOuoM5Felq0QYrajOtSeQRG2xDLwk7oLComE/wmdvpmXjsfl4PzplJm04hSRIxOvuIA==
+""")
+_BRAND_ML_DSA_44_PUBLIC = _decode_b64_blob("""
+bHI35oDTFEiAX92YQV4p2MGG3nRADmODOr5gcSQQsrSFbjXxeERVNuRB/m7RCM1ky807wOnkwPAXxkiaDj+RKquY
+rnNwwd2eILexnjMoeIG+QlMYKSE2q1kQo0cthZ5eCyhssh3jL2ni7sBidRVHCS7vSetGRWGIleF0cneXzalcnxBR
+1Du9R0CVyfd7T+MpsxBBA1M3p3GhYifWsTUwVnpQzSBKysA18d/x1uZ4DPtrJxKxxXPMqM609ZC2+U6SP0a4i19P
+SCMQ2TdxcWpAf+ninmrzUsz7SkVs5aCgr9OfzM6+Ysujfbmi2u2uxzQQQhOC1D1x0UNCnWLdOU0kvrBHX1hZUC+3
+hA1AwT2TWmmBleWn//LUXW/mbenMinqWwUQH40dJfPyVl+c6MRkmxeb6b9u9Qb60isVXzIHVzlfrZIXxD5xSqy4o
+pY18DX2eb7/KYiCGW8J89OfcoCKxchE7qQlg6R09qiufkh07ljsEk5fs33j8IXptwA9NHbQGX4o5yrQLCyhGbqvg
+f9Bny4vGg+qCX5A1UtdMtmL1k8U4bZSHx3czQfnqIC3Egdlcs0tMafSUziefRNPdj+VAWv7cExXE30TPgtC/tlNc
+TJnA0LTb9t9mns1BTRj43ur2Mg++Rmk56w/NohwzcXbTG2swIgPEQ0FhyjCqnH10lfkMJ/SxXrrseAo7cgtQsxcL
++6ap1Z34l88dmDE9D5AJztuTtAWeQcIfRdzpb/GUMSIujyAO1wRxSzb2yyeNqCkbMVwdsON1A8LKCxYk/wkI76sz
+xOrD8zNDMZdqmQE5wxu1QHCvjo6fNwlXqxcyz+FjchFtFyszGikBod02olO77Kda0OgDS5wVZTbapDqPQ8jqJg0J
+0t59Lk32XOOnjdKZSUjBXyA4cWeDtEBUmSqg1AcUS8BpMkEPiH+T0dVdojzpbLhzGBAVNd7IPbb5+efWkyNrqkUu
+2NDc2ENwVF8XT6vzwRS0cmh4o27LNNZN1vQclyo/ZGFH6Nk4Il7JSYNz8fgFTZ6s0zLTZ5KkEJfrriitg2Vn1XTt
+Uehp6PphDHJUJf1kgvqR4MZTEQSEmNzLjX6CHcO5iYyWOzsO8J1I4dP3+xsRLLodH4c6GXaGWQRgNqqVSFMhVDli
+bc83oe9aXAgNljR7hqX2OyI27+IDbbZ+4u+7QRU4YqzfOARFQdmuP1P6EfQYm2LRvaiRcqj7ll4SFQUvprezSwr7
+XVmG9871Uw54riSd9ECAicLyzRLk1ztJc0sCIGixyenb1Ges+tRyKIbumFKiij0bTfDtS33i/MP9gly3K92du2lt
+ulnyAU/Nig6dZ+DvJKABK03yadbHcg/TcsPjsn0DpCtK7LEIPhUG8ARPeVsofyEnESu8hQFKY73LkDe+F6P+rufr
+nuzc7+R5S5ws0Li7UcNANAb7F6jUyoXcihL85I9TzeCIlW5ry7WbVh4dHO4IjqsRZ4feN3GO5dB561YKvKTSSYUt
+vZ5Ag1l3neENDONr0AYWQ/H79JNSexpnZlMCi/yezI924cGBlJybmr394d9fSeGS9S4lUw8R61u9C/4pzP2bxJQY
+dwb79AnKOPaZ9hrn/jT1x1WcbniyQZ7Lu6x+wsNOSUZTSOj89jN4HPQ40+woH+7YaO4BbcAHYdgAyF2GKw/bT4BN
+lQ9ubzob6HtFZXsot6I60kQ2pQSd0/acqAEWi761Fmx3a18+IjQ53ydRmYtvToUstOgqyugCGd+N/Q==
+""")
+_BRAND_ML_DSA_44_SECRET = _decode_b64_blob("""
+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
+""")
 
 
 @dataclasses.dataclass
@@ -413,6 +544,7 @@ class DeviceMaterial:
     kem_public: bytes
     brand_cert: bytes
     device_cert: bytes
+    broadcast_kem_secret: bytes = b""
 
 
 def _b64(data: bytes) -> str:
@@ -427,21 +559,21 @@ def _canonical_json(value: Dict[str, Any]) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _signing_key(seed: bytes) -> Ed25519PrivateKey:
-    return Ed25519PrivateKey.from_private_bytes(seed)
+def _validate_ml_dsa_secret_key(secret_key: bytes) -> None:
+    if len(secret_key) != ML_DSA_44_SECRET_KEY_BYTES:
+        raise ValueError("ML-DSA-44 secret key has an invalid length")
 
 
-def _public_key_bytes(public_key: Ed25519PublicKey) -> bytes:
-    return public_key.public_bytes(Encoding.Raw, PublicFormat.Raw)
-
-
-def _signed_json(fields: Dict[str, Any], key: Ed25519PrivateKey) -> bytes:
+def _signed_json(fields: Dict[str, Any], secret_key: bytes) -> bytes:
+    _validate_ml_dsa_secret_key(secret_key)
     body = dict(fields)
-    body["signature"] = _b64(key.sign(_canonical_json(body)))
+    body["signature"] = _b64(ml_dsa_44.sign(secret_key, _canonical_json(body)))
     return _canonical_json(body)
 
 
-def _verify_signed_json(data: bytes, public_key: Ed25519PublicKey, expected_kind: str) -> Dict[str, Any]:
+def _verify_signed_json(data: bytes, public_key: bytes, expected_kind: str) -> Dict[str, Any]:
+    if len(public_key) != ML_DSA_44_PUBLIC_KEY_BYTES:
+        raise ProtocolError("ML-DSA-44 public key has an invalid length")
     try:
         cert = json.loads(data.decode())
         signature = _unb64(cert.pop("signature"))
@@ -450,54 +582,38 @@ def _verify_signed_json(data: bytes, public_key: Ed25519PublicKey, expected_kind
     if cert.get("kind") != expected_kind:
         raise ProtocolError(f"unexpected certificate kind {cert.get('kind')!r}")
     try:
-        public_key.verify(signature, _canonical_json(cert))
+        verified = ml_dsa_44.verify(public_key, _canonical_json(cert), signature)
     except Exception as exc:
         raise ProtocolError("certificate signature verification failed") from exc
+    if not verified:
+        raise ProtocolError("certificate signature verification failed")
     return cert
 
 
-def _derive_kem_public(kem_secret: bytes) -> bytes:
-    if len(kem_secret) != 32:
-        raise ValueError("demo ML-KEM secret must be 32 bytes")
-    return sm3(b"demo-ml-kem-public" + kem_secret)
-
-
-class DemoMlKem768:
-    """Tiny ML-KEM-shaped adapter for local interoperability tests.
-
-    It intentionally exposes ML-KEM-like encaps/decaps operations and produces
-    1088-byte ciphertexts with 32-byte shared secrets, matching ML-KEM-768 wire
-    sizes used by section 6.4. It is not cryptographically equivalent to
-    ML-KEM-768.
-    """
+class MlKem768:
+    """Small adapter around pqcrypto's ML-KEM-768 API."""
 
     @staticmethod
-    def encaps(public_key: bytes, label: bytes, seed: Optional[bytes] = None) -> Tuple[bytes, bytes]:
-        if len(public_key) != 32:
-            raise ProtocolError("demo ML-KEM public key must be 32 bytes")
-        seed = seed or os.urandom(32)
-        if len(seed) != 32:
-            raise ValueError("demo ML-KEM seed must be 32 bytes")
-        shared_secret = sm3(b"demo-ml-kem-768-ss" + label + public_key + seed)
-        authenticator = sm3(b"demo-ml-kem-768-auth" + public_key + shared_secret + seed + label)
-        stream = bytearray(seed + authenticator)
-        block = sm3(seed + public_key + label)
-        while len(stream) < ML_KEM_768_CIPHERTEXT_BYTES:
-            block = sm3(block + seed + public_key + label)
-            stream.extend(block)
-        return bytes(stream[:ML_KEM_768_CIPHERTEXT_BYTES]), shared_secret
+    def generate_keypair() -> Tuple[bytes, bytes]:
+        public_key, secret_key = ml_kem_768.generate_keypair()
+        return public_key, secret_key
 
     @staticmethod
-    def decaps(secret_key: bytes, ciphertext: bytes, label: bytes) -> bytes:
+    def encaps(public_key: bytes, _label: bytes) -> Tuple[bytes, bytes]:
+        if len(public_key) != ML_KEM_768_PUBLIC_KEY_BYTES:
+            raise ProtocolError("ML-KEM-768 public key has an invalid length")
+        return ml_kem_768.encrypt(public_key)
+
+    @staticmethod
+    def decaps(secret_key: bytes, ciphertext: bytes, _label: bytes) -> bytes:
+        if len(secret_key) != ML_KEM_768_SECRET_KEY_BYTES:
+            raise ProtocolError("ML-KEM-768 secret key has an invalid length")
         if len(ciphertext) != ML_KEM_768_CIPHERTEXT_BYTES:
             raise ProtocolError(f"KEM ciphertext must be {ML_KEM_768_CIPHERTEXT_BYTES} bytes")
-        public_key = _derive_kem_public(secret_key)
-        seed = ciphertext[:32]
-        shared_secret = sm3(b"demo-ml-kem-768-ss" + label + public_key + seed)
-        authenticator = sm3(b"demo-ml-kem-768-auth" + public_key + shared_secret + seed + label)
-        if not hmac.compare_digest(ciphertext[32:64], authenticator):
-            raise ProtocolError("KEM ciphertext authentication failed")
-        return shared_secret
+        try:
+            return ml_kem_768.decrypt(secret_key, ciphertext)
+        except Exception as exc:
+            raise ProtocolError("ML-KEM-768 decapsulation failed") from exc
 
 
 def make_device_material(role: str, device_id: int) -> DeviceMaterial:
@@ -506,36 +622,37 @@ def make_device_material(role: str, device_id: int) -> DeviceMaterial:
     if not 0 <= device_id <= 0xFFFFFFFFFFFFFFFF:
         raise ValueError("device_id must fit in 64 bits")
 
-    root_key = _signing_key(_ROOT_SIGNING_SEED)
-    brand_key = _signing_key(_BRAND_SIGNING_SEED)
-    brand_public = _public_key_bytes(brand_key.public_key())
+    root_key = _ROOT_ML_DSA_44_SECRET
+    brand_key = _BRAND_ML_DSA_44_SECRET
+    brand_public = _BRAND_ML_DSA_44_PUBLIC
 
     brand_cert = _signed_json(
         {
             "kind": "brand",
             "subject": "Demo Modbus 6.4 Brand",
             "issuer": "Demo ROT",
-            "algorithm": "SM2-with-SM3+ML-DSA-demo",
+            "algorithm": "ML-DSA-44",
             "brand_sign_public_key": _b64(brand_public),
         },
         root_key,
     )
 
-    kem_secret = sm3(f"modbus-6.4-demo-{role}-{device_id:016x}-ml-kem-private".encode())
-    kem_public = _derive_kem_public(kem_secret)
+    kem_public, kem_secret = MlKem768.generate_keypair()
+    broadcast_kem_secret = b""
     device_fields: Dict[str, Any] = {
         "kind": "device",
         "role": role,
         "issuer": "Demo Modbus 6.4 Brand",
         "device_id": f"0x{device_id:016x}",
-        "algorithm": "SM2-with-SM3+ML-DSA-demo",
+        "algorithm": "ML-DSA-44",
         "ml_kem_public_key": _b64(kem_public),
         "encryption_capability": ["aes_gcm"],
     }
     if role == "server":
-        device_fields["broadcast_ml_kem_public_key"] = _b64(_derive_kem_public(_BROADCAST_KEM_SECRET))
+        broadcast_kem_public, broadcast_kem_secret = MlKem768.generate_keypair()
+        device_fields["broadcast_ml_kem_public_key"] = _b64(broadcast_kem_public)
     device_cert = _signed_json(device_fields, brand_key)
-    return DeviceMaterial(role, device_id, kem_secret, kem_public, brand_cert, device_cert)
+    return DeviceMaterial(role, device_id, kem_secret, kem_public, brand_cert, device_cert, broadcast_kem_secret)
 
 
 def verify_device_certificate(
@@ -543,9 +660,9 @@ def verify_device_certificate(
     brand_cert: bytes,
     expected_role: str,
 ) -> Tuple[int, bytes, Dict[str, Any]]:
-    root_public = _signing_key(_ROOT_SIGNING_SEED).public_key()
+    root_public = _ROOT_ML_DSA_44_PUBLIC
     brand = _verify_signed_json(brand_cert, root_public, "brand")
-    brand_public = Ed25519PublicKey.from_public_bytes(_unb64(brand["brand_sign_public_key"]))
+    brand_public = _unb64(brand["brand_sign_public_key"])
     device = _verify_signed_json(device_cert, brand_public, "device")
     if device.get("role") != expected_role:
         raise ProtocolError(f"certificate role mismatch: expected {expected_role}")
@@ -556,7 +673,7 @@ def verify_device_certificate(
         raise ProtocolError("device certificate is missing required 6.4 fields") from exc
     if MODE_NAMES[MODE_AES_GCM] not in device.get("encryption_capability", []):
         raise ProtocolError("peer certificate does not advertise aes_gcm")
-    if len(kem_public) != 32:
+    if len(kem_public) != ML_KEM_768_PUBLIC_KEY_BYTES:
         raise ProtocolError("device certificate has an invalid ML-KEM public key")
     return device_id, kem_public, device
 
@@ -651,8 +768,8 @@ def run_master_handshake(sock: socket.socket, slave_id: int, client_id: int) -> 
     except (KeyError, ValueError) as exc:
         raise ProtocolError("server certificate is missing broadcast ML-KEM public key") from exc
 
-    kem_c, kemsk = DemoMlKem768.encaps(server_kem_public, b"KEM_C")
-    kem_bc, kemsk_b = DemoMlKem768.encaps(broadcast_public, b"KEM_BC")
+    kem_c, kemsk = MlKem768.encaps(server_kem_public, b"KEM_C")
+    kem_bc, kemsk_b = MlKem768.encaps(broadcast_public, b"KEM_BC")
     client_material = make_device_material("client", client_id)
     response = DataPayload(
         system_mask=SYSTEM_ID_VERSION_1,
@@ -733,8 +850,8 @@ def run_slave_handshake(sock: socket.socket, slave_id: int, server_id: int) -> P
         client_brand_cert or b"",
         expected_role="client",
     )
-    kemsk = DemoMlKem768.decaps(server_material.kem_secret, kem_c or b"", b"KEM_C")
-    kemsk_b = DemoMlKem768.decaps(_BROADCAST_KEM_SECRET, kem_bc or b"", b"KEM_BC")
+    kemsk = MlKem768.decaps(server_material.kem_secret, kem_c or b"", b"KEM_C")
+    kemsk_b = MlKem768.decaps(server_material.broadcast_kem_secret, kem_bc or b"", b"KEM_BC")
     auth_key = compute_auth_key(server_id, client_id, kemsk)
 
     akh_request = DataPayload(system_mask=SYSTEM_ID_VERSION_1, send={}, request=(TYPE_AKH,))

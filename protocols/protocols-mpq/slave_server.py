@@ -60,8 +60,7 @@ def serve(
             serve_connection(conn, slave_id, server_id, registers)
         except (EOFError, ProtocolError, ValueError) as exc:
             print(f"connection error: {exc}", file=sys.stderr, flush=True)        
-"""      
-    #simualation using Socket
+"""    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind((host, port))
@@ -78,7 +77,7 @@ def serve(
                     print(f"connection error: {exc}", file=sys.stderr, flush=True)
             if once:
                 return
-"""  
+"""    
 
 def main() -> int:
     parser = endpoint_args("Run a Modbus 6.4 PQ PKI secure-extension slave station server.")

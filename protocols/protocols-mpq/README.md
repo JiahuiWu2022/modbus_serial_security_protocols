@@ -2,9 +2,9 @@
 
 本项目实现《Modbus串行链路通信协议安全扩展技术要求》6.4 节描述的“基于后量子混合签名 PKI 公钥证书”的主从站参考端点，并提供一个单页 Web UI。
 
-示例用 TCP 承载 RTU 帧记录，方便无串口硬件时本地运行；RTU 帧本身仍包含从站地址、功能码和 CRC16。内容加密使用文档列出的 AES-GCM 模式，依赖 `cryptography`。
-
 说明：当前 Python 依赖没有生产级 ML-KEM-768 / ML-DSA-44 实现，6.4 模块使用演示 KEM 与 Ed25519 演示证书链来保持 APDU 字段、密文长度、共享密钥长度和派生公式与文档一致。生产环境需要替换为合规的 ML-KEM/ML-DSA/X.509/HSM 实现。
+
+说明：6.4 模块使用 `pqcrypto` 提供的 ML-KEM-768 完成 `KEM_C` / `KEM_BC` 封装与解封装，使用 ML-DSA-44 完成根/品牌/设备证书链签名验证。当前证书容器仍是便于演示和测试的 JSON 格式，内置根/品牌测试密钥只适合本地互通；生产环境需要替换为合规的 X.509/HSM 或设备安全存储实现。
 
 If a real UART interface is used in modbus_security_pq.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
 
@@ -125,6 +125,5 @@ python3 -m unittest discover -s tests
 - APDU 和数据载荷编解码
 - 6.4 后量子混合 PKI 主从站握手和加密读寄存器
 
-## 主要限制
 
-这是协议参考实现，不是生产级串口驱动。真实 RS-485/RS-232 部署需要把 `send_record` / `recv_record` 替换为串口收发和串行链路定界逻辑，并把证书私钥、KEM 解封装私钥、派生中间态和会话密钥放入设备可信执行环境或安全存储中。
+
