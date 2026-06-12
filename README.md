@@ -8,7 +8,7 @@ three prototype management-plane backends are illustrative instantiations. Just 
 3. SSM based on passwords or pre-shared keys relies on hardware protection. The goal of the protocol is to provide strong security on the basis of passwords, allowing master-slave devices to negotiate and obtain the same content key while resisting command or key guessing attacks. This type of protocol is suitable for use in factories and equipment with general value and security.
 
 ## Note:
-Please read Readme.md in each sub protocol directory first
+Please read Readme.md in each sub protocol directory first.
 If a real UART interface is used, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
    
