@@ -10,7 +10,7 @@ The root of this directory provides the unified launcher `unified_server.py`. It
 
 ## Note:
 
-If a real Hardware UART interface is used, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+If hardware Hardware UART interface is used, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
 ## Install Dependencies
 

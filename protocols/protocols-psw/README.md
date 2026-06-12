@@ -6,7 +6,7 @@ The RTU frame itself carries the slave address, function code, and CRC16. Conten
 
 ## Note:
 
-If a real UART interface is used in `modbus_security_psk.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+If hardware UART interface is used in `modbus_security_psk.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
 ## Implemented Features
 

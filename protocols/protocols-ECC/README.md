@@ -1,21 +1,21 @@
 # Reference Implementation of Modbus Serial-Link Security Extension based on the "ECC PKI certificate" profile 
 
 This project implements reference master and slave endpoints for the "ECC PKI certificate" profile. It also provides a single-page Web UI.
-It si recommended that using the "one command to start UI" mode: only start the UI console on the command line, and then complete PKI preparation, slave start, master start, and register read/write within the page.
+The recommended approach is the "one-command UI launch" mode: start only the UI console from the command line, then complete PKI preparation, slave startup, master startup, and register read/write operations within the page.
 
 ## Note:
 
-If a real UART interface is used in `frame.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+If hardware UART interface is used in `frame.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
-## 1. Requirements
+## 1. Environment Preparation
 
-Enter project directory:
+Enter the project directory:
 
 ```bash
 cd /home/protocols
 ```
 
-Confirm that Python is available:
+Confirm Python is available:
 
 ```bash
 python3 --version
@@ -27,17 +27,17 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-The current implementation relies on cryptography. If the environment has already pre installed the library, installation can be skipped.
+The current implementation depends on `cryptography`. If this library is already preinstalled in your environment, you can skip the installation.
 
-## 2. Command-Line Startup
+## 2. One-Command UI Launch
 
-Launch UI Console:
+Start the UI console:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 127.0.0.1 --port 18080
 ```
 
-Open a browser to access:
+Open a browser and visit:
 
 ```text
 http://127.0.0.1:18080/
@@ -46,63 +46,63 @@ http://127.0.0.1:18080/
 Startup parameters:
 
 ```text
---Host: UI service listens for IP addresses, such as 127.0.0.1 or 0.0.0.0
---Port: UI service listening port, such as 18080
+--host: The IP address the UI service listens on, e.g. 127.0.0.1 or 0.0.0.0
+--port: The port the UI service listens on, e.g. 18080
 ```
 
-If you need other machines on the same network to access the UI, you can listen to all network cards:
+To allow other machines on the same network to access the UI, you can listen on all network interfaces:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 0.0.0.0 --port 18080
 ```
 
-Then use the actual IP address of the server to access:
+Then access it using the server's actual IP:
 
 ```text
-Http://<Server IP>: 18080/
+http://<server-IP>:18080/
 ```
 
-The page includes the following operational areas:
+The page contains the following operation areas:
 
--Preparation: Enter the PKI directory and status directory, and click "Generate Demo PKI".
--Start Slave: Enter the listening address, listening port, and slave address, and click "Start Slave".
--Start the master station: Enter the target slave station address, port, and slave station number, and click "Start Master Station".
--Register operations: read and hold registers, write single registers.
--Security link parameters: display master and slave station IDs, function codes, authentication context, handshake stage.
--Key and Counter Output: Display truncated digests of AKH/DHSK/SAK/SEK/CK/CIV/BCK/BCIV, as well as SAC and content PDU counters.
--Recent results: Display the latest read and write operation results.
--Slave log: displays the output of slave processes.
--Operation events: Display the preparation, startup, and read-write events executed within the UI.
+- Preparation: Enter the PKI directory and state directory, then click "Generate Demo PKI".
+- Start Slave: Enter the listening address, listening port, and slave address, then click "Start Slave".
+- Start Master: Enter the target slave address, port, and slave number, then click "Start Master".
+- Register Operations: Perform Read Holding Registers and Write Single Register.
+- Secure Link Parameters: Display master/slave IDs, function code, authentication context, and handshake phase.
+- Key and Counter Output: Display the truncated digests of `AKH/DHSK/SAK/SEK/CK/CIV/BCK/BCIV`, as well as the SAC and content PDU counters.
+- Latest Result: Display the result of the most recent read/write operation.
+- Slave Log: Display the slave process output.
+- Operation Events: Display the preparation, startup, and read/write events executed within the UI.
 
 Default page parameters:
 
 ```text
 PKI directory: demo_pki
-Status directory:. secure_modbus_ste
+State directory: .secure_modbus_state
 Slave listening address: 127.0.0.1
 Slave listening port: 15020
 Slave address: 1
-Main Station Target Slave Station: 127.0.0.1:15020/1
+Master target slave: 127.0.0.1:15020 / 1
 ```
 
-## 3. Operation sequence within UI
+## 3. Operation Order Within the UI
 
-###3.1 Generate Demonstration PKI
+### 3.1 Generate Demo PKI
 
-Click on the "Preparation Work" area:
+In the "Preparation" area, click:
 
 ```text
-Generate demonstration PKI
+Generate Demo PKI
 ```
 
-After generation, the demo identity will be displayed:
+After generation, the demo identities are displayed:
 
 ```text
 CLIENT_ID = 0102030405060708
 SERVER_ID = 1112131415161718
 ```
 
- Directory structure:
+Generated directory structure:
 
 ```text
 demo_pki/
@@ -117,9 +117,9 @@ demo_pki/
     brand_cert.json
 ```
 
-###3.2 Starting the slave station
+### 3.2 Start Slave
 
-Confirm parameters in the "Start Slave" area:
+In the "Start Slave" area, confirm the parameters:
 
 ```text
 Listening address: 127.0.0.1
@@ -127,84 +127,84 @@ Listening port: 15020
 Slave address: 1
 ```
 
-Click：
+Click:
 
 ```text
-Start slave station
+Start Slave
 ```
 
-The 'Running Status' on the right side of the page will display the slave PID, and the' Slave Log 'will display the listening log.
+The "Run Status" section on the right side of the page will show the slave PID, and the "Slave Log" will show the listening log.
 
-###3.3 Start the master station
+### 3.3 Start Master
 
-Confirm parameters in the 'Start Master Station' area:
+In the "Start Master" area, confirm the parameters:
 
 ```text
 Slave address: 127.0.0.1
 Slave port: 15020
-Target Station Number: 1
+Target slave number: 1
 ```
 
-Click：
+Click:
 
 ```text
-start the master station
+Start Master
 ```
 
-At this point, the master station object has been created, but the secure handshake is usually triggered during the first read/write operation.
+At this point the master object has been created, but the security handshake is usually triggered on the first read/write operation.
 
-###3.4 Read the Hold Register
+### 3.4 Read Holding Registers
 
-Fill in the "Register Operations" area with:
+In the "Register Operations" area, fill in:
 
 ```text
-Read starting address: 0
+Read start address: 0
 Read quantity: 4
 ```
 
-Click：
+Click:
 
 ```text
-read
+Read
 ```
 
-The first read will trigger the complete security link:
+The first read triggers the full secure link:
 
 ```text
-slave station ss_open_deq
-Master station ss_open_cnf
-Certificate authentication or AKH re authentication
+Slave ss_open_req
+Master ss_open_cnf
+Certificate authentication or AKH re-authentication
 SAC initialization
 Content key CK/BCK update
-Ss_data_Snd encrypted transmission of Modbus PDU
+ss_data_send encrypted transmission of the Modbus PDU
 ```
 
-After completion, the page will display：
+Once complete, the page displays:
 
--Read register values
--CLIENT ID and SERVER ID`
--Have the four security stages been completed
--Key Digest and Counter
--Log of decrypted encrypted PDU received from the station
+- The register values read
+- `CLIENT_ID` and `SERVER_ID`
+- Whether the four security phases are complete
+- Key digests and counters
+- The decrypted log of the encrypted PDU received by the slave
 
-###3.5 Writing Single Register
+### 3.5 Write Single Register
 
-Fill in the "Register Operations" area with:
+In the "Register Operations" area, fill in:
 
 ```text
 Write address: 3
 Write value: 2468
 ```
 
-Click：
+Click:
 
 ```text
-write
+Write
 ```
 
-After successful writing, the page will automatically read back to nearby registers and display the results in the "Recent Results" and "Operation Events" sections.
+After a successful write, the page automatically reads back nearby registers and displays the result in "Latest Result" and "Operation Events".
 
-## 4. UI Control Interface
+## 4. UI Control Interfaces
 
 The UI page calls the following local interfaces:
 
@@ -220,7 +220,7 @@ GET  /api/read?start=0&qty=4
 POST /api/write?register=3&value=2468
 ```
 
-Example:
+Examples:
 
 ```bash
 curl -X POST 'http://127.0.0.1:18080/api/pki/init?pki=demo_pki'
@@ -230,19 +230,19 @@ curl 'http://127.0.0.1:18080/api/read?start=0&qty=4'
 curl -X POST 'http://127.0.0.1:18080/api/write?register=3&value=2468'
 ```
 
-## 5. Manual command mode
+## 5. Manual Command Mode
 
-If you don't use a single command UI, you can also start the master and slave stations separately.
+If you do not use the one-command UI, you can also start the master and slave separately.
 
-###5.1 Generate Demonstration PKI
+### 5.1 Generate Demo PKI
 
 ```bash
 python3 -m secure_modbus.pki --out demo_pki
 ```
 
-###5.2 Starting the Slave Service
+### 5.2 Start the Slave Service
 
-The slave is responsible for monitoring TCP connections, initiating authentication, SAC establishment, content key updates, and processing encrypted Modbus PDUs according to the process.
+The slave is responsible for listening for TCP connections, initiating authentication, SAC establishment, and content key updates per the 6.2 flow, and processing encrypted Modbus PDUs.
 
 ```bash
 python3 -m secure_modbus.slave_server \
@@ -259,9 +259,9 @@ Listening port: 15020
 Modbus slave address: 1
 ```
 
-###5.3 Starting the master station service and front-end UI
+### 5.3 Start the Master Service and Front-End UI
 
-The master station service connects to the slave station and provides HTTP API and front-end console.
+The master service connects to the slave and provides the HTTP API and front-end console.
 
 ```bash
 python3 -m secure_modbus.master_server \
@@ -270,71 +270,71 @@ python3 -m secure_modbus.master_server \
   --http-port 18080
 ```
 
-Open after startup:
+After startup, open:
 
 ```text
 http://127.0.0.1:18080/
 ```
 
-Front end UI display:
+The front-end UI displays:
 
--Master Station ` CLIENT-ID`
--Slave Station ` SERVER ID`
--Slave TCP address, Modbus address, function code ` 0x00`
--Certificate authentication or re authentication status
--SAC channel establishment status
--Content key update status
--Encrypt Modbus PDU status
--Truncated abstracts of AKH, DHSK, SAK, SEK, CK, CIV, BCK, BCIV
--SAC sending/receiving counter
--Content PDU sending counter
--Read and write register operation log
+- Master `CLIENT_ID`
+- Slave `SERVER_ID`
+- Slave TCP address, Modbus address, function code `0x00`
+- Certificate authentication or re-authentication status
+- SAC channel establishment status
+- Content key update status
+- Encrypted Modbus PDU status
+- Truncated digests of `AKH`, `DHSK`, `SAK`, `SEK`, `CK`, `CIV`, `BCK`, `BCIV`
+- SAC send/receive counters
+- Content PDU send counter
+- Register read/write operation log
 
-## 6. Manual mode front-end operation
+## 6. Front-End Operations in Manual Mode
 
-###Read the Hold Register
+### Read Holding Registers
 
-Fill in the following in the UI:
+In the UI, fill in:
 
 ```text
-Starting address: 0
+Start address: 0
 Quantity: 4
 ```
 
-Click on 'Read'.
+Click "Read".
 
-###Write Single Register
+### Write Single Register
 
-Fill in the following in the UI:
+In the UI, fill in:
 
 ```text
 Write address: 2
 Write value: 4321
 ```
 
-Click on 'Write'. After successful writing, the page will automatically read back to nearby registers.
+Click "Write". After a successful write, the page automatically reads back nearby registers.
 
-## 7. Manual mode HTTP API validation
+## 7. HTTP API Verification in Manual Mode
 
-Check the health status of the service:
+Check the service health status:
 
 ```bash
 curl 'http://127.0.0.1:18080/health'
 ```
 
-Check the security link status:
+Check the secure link status:
 
 ```bash
 curl 'http://127.0.0.1:18080/status'
 ```
 
-Read the hold register:
+Read holding registers:
 
 ```bash
 curl 'http://127.0.0.1:18080/read?start=0&qty=4'
 ```
 
-Write single register:
+Write a single register:
 
 ```bash
 curl -X POST 'http://127.0.0.1:18080/write?register=2&value=4321'
@@ -346,7 +346,7 @@ Example response:
 {"start": 0, "quantity": 4, "values": [0, 1, 4321, 3]}
 ```
 
-## 8. Authentication context
+## 8. Authentication Context
 
 The authentication context is saved by default in:
 
@@ -354,76 +354,76 @@ The authentication context is saved by default in:
 .secure_modbus_state/
 ```
 
-After the first binding, the master and slave stations will save the 'DHSK', 'AKH/AKM', peer ID, and encryption mode. When restarting later, if the authentication context is valid, the AKH re authentication path will be prioritized, reducing the steps of certificate authentication and ECDH exchange.
+After the first binding, the master and slave save `DHSK`, `AKH/AKM`, the peer ID, and the encryption mode. On subsequent restarts, if the authentication context is valid, the AKH re-authentication path is preferred, reducing the certificate authentication and ECDH exchange steps.
 
-To perform the first certificate authentication again, you can delete the directory and restart the master-slave station:
+To re-run the initial certificate authentication, delete this directory and restart the master and slave:
 
 ```bash
 rm -rf .secure_modbus_state
 ```
 
-## 9. Functional scope
+## 9. Feature Scope
 
 Implemented:
 
--Modbus RTU outer frame encapsulation and CRC16 verification
--Function Code 0x00 Security Extension APDU
--ECC PKI Demonstration Certificate Chain
--ECDSA certificate signature verification
--ECDH Master Key Agreement
--RM and RH verification
--AKH/AKM authentication key verification
--SAC channel authentication and encryption encapsulation
--Content Key 'CK/COV', Broadcast Content Key 'BCK/BCIV' Update
--Encrypt transmission of raw Modbus PDU
--0x03 Read hold register
--0x06 Write Single Register
--Front end UI status display and register operation
+- Modbus RTU outer frame encapsulation and CRC16 verification
+- Function code `0x00` security extension APDU
+- ECC PKI demo certificate chain
+- ECDSA certificate signature verification
+- ECDH master key negotiation
+- `RM` and `RH` verification
+- `AKH/AKM` authentication key verification
+- SAC channel authentication and encrypted encapsulation
+- Content key `CK/CIV` and broadcast content key `BCK/BCIV` updates
+- Encrypted transmission of raw Modbus PDUs
+- `0x03` Read Holding Registers
+- `0x06` Write Single Register
+- Front-end UI status display and register operations
 
-Note: The SM2/SM3/SM4, AES-XCBC-MAC, HSM, TEE, and hardware secure storage required by the document require a dedicated national security repository and hardware environment. The algorithm layer in this project uses the P-256 ECDSA/ECDH, SHA-256/HKDF, AES-CBC/HMAC, and AES-GCM provided by Cryptography as executable reference implementations, which can be replaced with national secret implementations in secure_modbus/crypto. py in the future.
+Note: The SM2/SM3/SM4, AES-XCBC-MAC, HSM, TEE, and hardware secure storage required by the specification need dedicated SM (Chinese national commercial cryptography) libraries and hardware environments. The algorithm layer in this project uses P-256 ECDSA/ECDH, SHA-256/HKDF, AES-CBC/HMAC, and AES-GCM provided by `cryptography` as a runnable reference implementation. These can later be replaced with SM cryptographic implementations in `secure_modbus/crypto.py`.
 
-## 10. Q&R
+## 10. FAQ
 
-###Port is occupied
+### Port Already in Use
 
-If '15020' or '18080' is already occupied, the port can be changed:
+If `15020` or `18080` is already in use, you can switch ports:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 127.0.0.1 --port 18081
 ```
 
-Then access:
+Then visit:
 
 ```text
 http://127.0.0.1:18081/
 ```
 
-In manual mode, the master and slave station ports can also be switched separately：
+In manual mode, you can also switch the master and slave ports separately:
 
 ```bash
 python3 -m secure_modbus.slave_server --pki demo_pki --port 15021 --address 1
 python3 -m secure_modbus.master_server --pki demo_pki --slave-port 15021 --http-port 18081
 ```
 
-###Master station connection failed
+### Master Connection Failure
 
-In a command UI, confirm that the slave has been started and that the target slave port of the master is consistent with the slave listening port. The first read or write will trigger a secure connection and handshake.
+In the one-command UI, confirm the slave has been started and that the master's target slave port matches the slave's listening port. The first read or write triggers the secure connection and handshake.
 
-Manual mode can check:
+In manual mode, you can check:
 
 ```bash
 curl 'http://127.0.0.1:18080/status'
 ```
 
-If 'connected' is set to 'false' in the state, performing a read operation in the UI will trigger the connection and handshake. If it still fails, confirm that the slave port, PKI directory, and slave address are consistent.
+If `connected` is `false` in the status, performing a read operation in the UI will trigger the connection and handshake. If it still fails, confirm that the slave port, PKI directory, and slave address are consistent.
 
-###Certificate or authentication failed
+### Certificate or Authentication Failure
 
-Regenerate the demonstration PKI and clean up the authentication context:
+Regenerate the demo PKI and clear the authentication context:
 
 ```bash
 rm -rf demo_pki .secure_modbus_state
 python3 -m secure_modbus.pki --out demo_pki
 ```
 
-Then restart the slave and master stations in sequence, or regenerate the PKI and restart the master and slave stations in a command UI.
+Then restart the slave and master in order, or regenerate the PKI and restart the master and slave in the one-command UI.

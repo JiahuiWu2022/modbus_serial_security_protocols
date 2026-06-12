@@ -6,7 +6,7 @@ The current module uses ML-KEM-768 from `pqcrypto` for `KEM_C` and `KEM_BC` enca
 
 ## Note:
 
-If a real UART interface is used in `modbus_security_pq.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+If hardware UART interface is used in `modbus_security_pq.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
 ## Implemented Features
 
