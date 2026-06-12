@@ -9,7 +9,7 @@ three prototype management-plane backends are illustrative instantiations. Just 
 
 ## Note:
 Please read Readme.md in each sub protocol directory first.
-If a Hardware UART interface is used, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+If a hardware UART interface is used, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
    
 ## Reference specification.
