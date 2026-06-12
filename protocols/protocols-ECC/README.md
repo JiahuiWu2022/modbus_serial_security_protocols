@@ -1,107 +1,108 @@
-# Modbus 串行链路安全扩展 6.2 参考实现
+# Reference Implementation of Modbus Serial-Link Security Extension based on the "ECC PKI certificate" profile 
 
-这是根据《Modbus串行链路通信协议安全扩展技术要求》第 6.2 节实现的主站/从站参考原型，包含安全协议实现、主从站服务和前端 UI 控制台。
+This project implements reference master and slave endpoints for the "ECC PKI certificate" profile. It also provides a single-page Web UI.
+It si recommended that using the "one command to start UI" mode: only start the UI console on the command line, and then complete PKI preparation, slave start, master start, and register read/write within the page.
 
-推荐使用“一命令启动 UI”模式：只在命令行启动 UI 控制台，然后在页面内完成 PKI 准备、从站启动、主站启动和寄存器读写。
+## Note:
 
-If a real UART interface is used in frame.py, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+If a real UART interface is used in `frame.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
-## 1. 环境准备
+## 1. Requirements
 
-进入项目目录：
+Enter project directory:
 
 ```bash
 cd /home/protocols
 ```
 
-确认 Python 可用：
+Confirm that Python is available:
 
 ```bash
 python3 --version
 ```
 
-安装依赖：
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-当前实现依赖 `cryptography`。如果环境已经预装该库，可跳过安装。
+The current implementation relies on cryptography. If the environment has already pre installed the library, installation can be skipped.
 
-## 2. 一命令启动 UI
+## 2. Command-Line Startup
 
-启动 UI 控制台：
+Launch UI Console:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 127.0.0.1 --port 18080
 ```
 
-打开浏览器访问：
+Open a browser to access:
 
 ```text
 http://127.0.0.1:18080/
 ```
 
-启动参数：
+Startup parameters:
 
 ```text
---host：UI 服务监听 IP 地址，例如 127.0.0.1 或 0.0.0.0
---port：UI 服务监听端口，例如 18080
+--Host: UI service listens for IP addresses, such as 127.0.0.1 or 0.0.0.0
+--Port: UI service listening port, such as 18080
 ```
 
-如果需要让同一网络内其他机器访问 UI，可监听所有网卡：
+If you need other machines on the same network to access the UI, you can listen to all network cards:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 0.0.0.0 --port 18080
 ```
 
-然后使用服务器实际 IP 访问：
+Then use the actual IP address of the server to access:
 
 ```text
-http://<服务器IP>:18080/
+Http://<Server IP>: 18080/
 ```
 
-页面包含以下操作区：
+The page includes the following operational areas:
 
-- 准备工作：输入 PKI 目录、状态目录，点击“生成演示 PKI”。
-- 启动从站：输入监听地址、监听端口、从站地址，点击“启动从站”。
-- 启动主站：输入目标从站地址、端口和从站号，点击“启动主站”。
-- 寄存器操作：执行读保持寄存器、写单寄存器。
-- 安全链路参数：展示主从站 ID、功能码、认证上下文、握手阶段。
-- 密钥与计数器输出：展示 `AKH/DHSK/SAK/SEK/CK/CIV/BCK/BCIV` 的截断摘要，以及 SAC 和内容 PDU 计数器。
-- 最近结果：展示最近一次读写操作结果。
-- 从站日志：展示从站进程输出。
-- 操作事件：展示 UI 内执行的准备、启动和读写事件。
+-Preparation: Enter the PKI directory and status directory, and click "Generate Demo PKI".
+-Start Slave: Enter the listening address, listening port, and slave address, and click "Start Slave".
+-Start the master station: Enter the target slave station address, port, and slave station number, and click "Start Master Station".
+-Register operations: read and hold registers, write single registers.
+-Security link parameters: display master and slave station IDs, function codes, authentication context, handshake stage.
+-Key and Counter Output: Display truncated digests of AKH/DHSK/SAK/SEK/CK/CIV/BCK/BCIV, as well as SAC and content PDU counters.
+-Recent results: Display the latest read and write operation results.
+-Slave log: displays the output of slave processes.
+-Operation events: Display the preparation, startup, and read-write events executed within the UI.
 
-默认页面参数：
+Default page parameters:
 
 ```text
-PKI 目录：demo_pki
-状态目录：.secure_modbus_state
-从站监听地址：127.0.0.1
-从站监听端口：15020
-从站地址：1
-主站目标从站：127.0.0.1:15020 / 1
+PKI directory: demo_pki
+Status directory:. secure_modbus_ste
+Slave listening address: 127.0.0.1
+Slave listening port: 15020
+Slave address: 1
+Main Station Target Slave Station: 127.0.0.1:15020/1
 ```
 
-## 3. UI 内操作顺序
+## 3. Operation sequence within UI
 
-### 3.1 生成演示 PKI
+###3.1 Generate Demonstration PKI
 
-在“准备工作”区域点击：
+Click on the "Preparation Work" area:
 
 ```text
-生成演示 PKI
+Generate demonstration PKI
 ```
 
-生成后会显示演示身份：
+After generation, the demo identity will be displayed:
 
 ```text
 CLIENT_ID = 0102030405060708
 SERVER_ID = 1112131415161718
 ```
 
-生成目录结构：
+ Directory structure:
 
 ```text
 demo_pki/
@@ -116,96 +117,96 @@ demo_pki/
     brand_cert.json
 ```
 
-### 3.2 启动从站
+###3.2 Starting the slave station
 
-在“启动从站”区域确认参数：
-
-```text
-监听地址：127.0.0.1
-监听端口：15020
-从站地址：1
-```
-
-点击：
+Confirm parameters in the "Start Slave" area:
 
 ```text
-启动从站
+Listening address: 127.0.0.1
+Listening port: 15020
+Slave address: 1
 ```
 
-页面右侧“运行状态”会显示从站 PID，“从站日志”会显示监听日志。
-
-### 3.3 启动主站
-
-在“启动主站”区域确认参数：
+Click：
 
 ```text
-从站地址：127.0.0.1
-从站端口：15020
-目标从站号：1
+Start slave station
 ```
 
-点击：
+The 'Running Status' on the right side of the page will display the slave PID, and the' Slave Log 'will display the listening log.
+
+###3.3 Start the master station
+
+Confirm parameters in the 'Start Master Station' area:
 
 ```text
-启动主站
+Slave address: 127.0.0.1
+Slave port: 15020
+Target Station Number: 1
 ```
 
-此时主站对象已创建，但安全握手通常会在第一次读写操作时触发。
-
-### 3.4 读取保持寄存器
-
-在“寄存器操作”区域填写：
+Click：
 
 ```text
-读起始地址：0
-读取数量：4
+start the master station
 ```
 
-点击：
+At this point, the master station object has been created, but the secure handshake is usually triggered during the first read/write operation.
+
+###3.4 Read the Hold Register
+
+Fill in the "Register Operations" area with:
 
 ```text
-读取
+Read starting address: 0
+Read quantity: 4
 ```
 
-首次读取会触发完整安全链路：
+Click：
 
 ```text
-从站 ss_open_req
-主站 ss_open_cnf
-证书认证或 AKH 重新认证
-SAC 初始化
-内容密钥 CK/BCK 更新
-ss_data_send 加密传输 Modbus PDU
+read
 ```
 
-完成后页面会展示：
-
-- 读出的寄存器值
-- `CLIENT_ID` 与 `SERVER_ID`
-- 四个安全阶段是否完成
-- 密钥摘要和计数器
-- 从站收到的加密 PDU 解密后的日志
-
-### 3.5 写单寄存器
-
-在“寄存器操作”区域填写：
+The first read will trigger the complete security link:
 
 ```text
-写入地址：3
-写入值：2468
+slave station ss_open_deq
+Master station ss_open_cnf
+Certificate authentication or AKH re authentication
+SAC initialization
+Content key CK/BCK update
+Ss_data_Snd encrypted transmission of Modbus PDU
 ```
 
-点击：
+After completion, the page will display：
+
+-Read register values
+-CLIENT ID and SERVER ID`
+-Have the four security stages been completed
+-Key Digest and Counter
+-Log of decrypted encrypted PDU received from the station
+
+###3.5 Writing Single Register
+
+Fill in the "Register Operations" area with:
 
 ```text
-写入
+Write address: 3
+Write value: 2468
 ```
 
-写入成功后页面会自动回读附近寄存器，并在“最近结果”和“操作事件”中显示结果。
+Click：
 
-## 4. UI 控制接口
+```text
+write
+```
 
-UI 页面调用以下本地接口：
+After successful writing, the page will automatically read back to nearby registers and display the results in the "Recent Results" and "Operation Events" sections.
+
+## 4. UI Control Interface
+
+The UI page calls the following local interfaces:
 
 ```text
 GET  /
@@ -219,7 +220,7 @@ GET  /api/read?start=0&qty=4
 POST /api/write?register=3&value=2468
 ```
 
-示例：
+Example:
 
 ```bash
 curl -X POST 'http://127.0.0.1:18080/api/pki/init?pki=demo_pki'
@@ -229,19 +230,19 @@ curl 'http://127.0.0.1:18080/api/read?start=0&qty=4'
 curl -X POST 'http://127.0.0.1:18080/api/write?register=3&value=2468'
 ```
 
-## 5. 手工命令模式
+## 5. Manual command mode
 
-如果不使用一命令 UI，也可以分别启动主从站。
+If you don't use a single command UI, you can also start the master and slave stations separately.
 
-### 5.1 生成演示 PKI
+###5.1 Generate Demonstration PKI
 
 ```bash
 python3 -m secure_modbus.pki --out demo_pki
 ```
 
-### 5.2 启动从站服务
+###5.2 Starting the Slave Service
 
-从站负责监听 TCP 连接，按 6.2 流程发起认证、SAC 建立、内容密钥更新，并处理加密 Modbus PDU。
+The slave is responsible for monitoring TCP connections, initiating authentication, SAC establishment, content key updates, and processing encrypted Modbus PDUs according to the process.
 
 ```bash
 python3 -m secure_modbus.slave_server \
@@ -250,17 +251,17 @@ python3 -m secure_modbus.slave_server \
   --address 1
 ```
 
-默认参数：
+Default parameters:
 
 ```text
-监听地址：127.0.0.1
-监听端口：15020
-Modbus 从站地址：1
+Listening address: 127.0.0.1
+Listening port: 15020
+Modbus slave address: 1
 ```
 
-### 5.3 启动主站服务和前端 UI
+###5.3 Starting the master station service and front-end UI
 
-主站服务连接从站，并提供 HTTP API 和前端控制台。
+The master station service connects to the slave station and provides HTTP API and front-end console.
 
 ```bash
 python3 -m secure_modbus.master_server \
@@ -269,160 +270,160 @@ python3 -m secure_modbus.master_server \
   --http-port 18080
 ```
 
-启动后打开：
+Open after startup:
 
 ```text
 http://127.0.0.1:18080/
 ```
 
-前端 UI 展示：
+Front end UI display:
 
-- 主站 `CLIENT_ID`
-- 从站 `SERVER_ID`
-- 从站 TCP 地址、Modbus 地址、功能码 `0x00`
-- 证书认证或重新认证状态
-- SAC 通道建立状态
-- 内容密钥更新状态
-- 加密 Modbus PDU 状态
-- `AKH`、`DHSK`、`SAK`、`SEK`、`CK`、`CIV`、`BCK`、`BCIV` 的截断摘要
-- SAC 发送/接收计数器
-- 内容 PDU 发送计数器
-- 读写寄存器操作日志
+-Master Station ` CLIENT-ID`
+-Slave Station ` SERVER ID`
+-Slave TCP address, Modbus address, function code ` 0x00`
+-Certificate authentication or re authentication status
+-SAC channel establishment status
+-Content key update status
+-Encrypt Modbus PDU status
+-Truncated abstracts of AKH, DHSK, SAK, SEK, CK, CIV, BCK, BCIV
+-SAC sending/receiving counter
+-Content PDU sending counter
+-Read and write register operation log
 
-## 6. 手工模式前端操作
+## 6. Manual mode front-end operation
 
-### 读取保持寄存器
+###Read the Hold Register
 
-在 UI 中填写：
-
-```text
-起始地址：0
-数量：4
-```
-
-点击“读取”。
-
-### 写单寄存器
-
-在 UI 中填写：
+Fill in the following in the UI:
 
 ```text
-写入地址：2
-写入值：4321
+Starting address: 0
+Quantity: 4
 ```
 
-点击“写入”。写入成功后页面会自动回读附近寄存器。
+Click on 'Read'.
 
-## 7. 手工模式 HTTP API 验证
+###Write Single Register
 
-查看服务健康状态：
+Fill in the following in the UI:
+
+```text
+Write address: 2
+Write value: 4321
+```
+
+Click on 'Write'. After successful writing, the page will automatically read back to nearby registers.
+
+## 7. Manual mode HTTP API validation
+
+Check the health status of the service:
 
 ```bash
 curl 'http://127.0.0.1:18080/health'
 ```
 
-查看安全链路状态：
+Check the security link status:
 
 ```bash
 curl 'http://127.0.0.1:18080/status'
 ```
 
-读取保持寄存器：
+Read the hold register:
 
 ```bash
 curl 'http://127.0.0.1:18080/read?start=0&qty=4'
 ```
 
-写单寄存器：
+Write single register:
 
 ```bash
 curl -X POST 'http://127.0.0.1:18080/write?register=2&value=4321'
 ```
 
-示例响应：
+Example response:
 
 ```json
 {"start": 0, "quantity": 4, "values": [0, 1, 4321, 3]}
 ```
 
-## 8. 认证上下文
+## 8. Authentication context
 
-认证上下文默认保存在：
+The authentication context is saved by default in:
 
 ```text
 .secure_modbus_state/
 ```
 
-主站和从站在首次绑定后会保存 `DHSK`、`AKH/AKM`、对端 ID 和加密模式。后续重新启动时，如果认证上下文有效，会优先走 AKH 重新认证路径，减少证书认证和 ECDH 交换步骤。
+After the first binding, the master and slave stations will save the 'DHSK', 'AKH/AKM', peer ID, and encryption mode. When restarting later, if the authentication context is valid, the AKH re authentication path will be prioritized, reducing the steps of certificate authentication and ECDH exchange.
 
-如需重新执行首次证书认证，可删除该目录后重启主从站：
+To perform the first certificate authentication again, you can delete the directory and restart the master-slave station:
 
 ```bash
 rm -rf .secure_modbus_state
 ```
 
-## 9. 功能范围
+## 9. Functional scope
 
-已实现：
+Implemented:
 
-- Modbus RTU 外层帧封装和 CRC16 校验
-- 功能码 `0x00` 安全扩展 APDU
-- ECC PKI 演示证书链
-- ECDSA 证书签名验证
-- ECDH 主密钥协商
-- `RM`、`RH` 校验
-- `AKH/AKM` 认证密钥验证
-- SAC 通道认证与加密封装
-- 内容密钥 `CK/CIV`、广播内容密钥 `BCK/BCIV` 更新
-- 加密传输原始 Modbus PDU
-- `0x03` 读保持寄存器
-- `0x06` 写单寄存器
-- 前端 UI 状态展示和寄存器操作
+-Modbus RTU outer frame encapsulation and CRC16 verification
+-Function Code 0x00 Security Extension APDU
+-ECC PKI Demonstration Certificate Chain
+-ECDSA certificate signature verification
+-ECDH Master Key Agreement
+-RM and RH verification
+-AKH/AKM authentication key verification
+-SAC channel authentication and encryption encapsulation
+-Content Key 'CK/COV', Broadcast Content Key 'BCK/BCIV' Update
+-Encrypt transmission of raw Modbus PDU
+-0x03 Read hold register
+-0x06 Write Single Register
+-Front end UI status display and register operation
 
-说明：文档要求的 SM2/SM3/SM4、AES-XCBC-MAC、HSM、TEE 和硬件安全存储需要专用国密库和硬件环境。本项目中的算法层使用 `cryptography` 提供的 P-256 ECDSA/ECDH、SHA-256/HKDF、AES-CBC/HMAC 和 AES-GCM 作为可运行参考实现，后续可在 `secure_modbus/crypto.py` 中替换为国密实现。
+Note: The SM2/SM3/SM4, AES-XCBC-MAC, HSM, TEE, and hardware secure storage required by the document require a dedicated national security repository and hardware environment. The algorithm layer in this project uses the P-256 ECDSA/ECDH, SHA-256/HKDF, AES-CBC/HMAC, and AES-GCM provided by Cryptography as executable reference implementations, which can be replaced with national secret implementations in secure_modbus/crypto. py in the future.
 
-## 10. 常见问题
+## 10. Q&R
 
-### 端口被占用
+###Port is occupied
 
-如果 `15020` 或 `18080` 已被占用，可换端口：
+If '15020' or '18080' is already occupied, the port can be changed:
 
 ```bash
 python3 -m secure_modbus.ui_server --host 127.0.0.1 --port 18081
 ```
 
-然后访问：
+Then access:
 
 ```text
 http://127.0.0.1:18081/
 ```
 
-手工模式下也可分别换主从站端口：
+In manual mode, the master and slave station ports can also be switched separately：
 
 ```bash
 python3 -m secure_modbus.slave_server --pki demo_pki --port 15021 --address 1
 python3 -m secure_modbus.master_server --pki demo_pki --slave-port 15021 --http-port 18081
 ```
 
-### 主站连接失败
+###Master station connection failed
 
-在一命令 UI 中，确认从站已经启动，并且主站目标从站端口与从站监听端口一致。第一次读取或写入会触发安全连接和握手。
+In a command UI, confirm that the slave has been started and that the target slave port of the master is consistent with the slave listening port. The first read or write will trigger a secure connection and handshake.
 
-手工模式可检查：
+Manual mode can check:
 
 ```bash
 curl 'http://127.0.0.1:18080/status'
 ```
 
-如果状态中 `connected` 为 `false`，在 UI 中执行一次读取操作会触发连接和握手。若仍失败，确认从站端口、PKI 目录和从站地址一致。
+If 'connected' is set to 'false' in the state, performing a read operation in the UI will trigger the connection and handshake. If it still fails, confirm that the slave port, PKI directory, and slave address are consistent.
 
-### 证书或认证失败
+###Certificate or authentication failed
 
-重新生成演示 PKI 并清理认证上下文：
+Regenerate the demonstration PKI and clean up the authentication context:
 
 ```bash
 rm -rf demo_pki .secure_modbus_state
 python3 -m secure_modbus.pki --out demo_pki
 ```
 
-然后按顺序重启从站和主站，或在一命令 UI 中重新生成 PKI 并重新启动主从站。
+Then restart the slave and master stations in sequence, or regenerate the PKI and restart the master and slave stations in a command UI.

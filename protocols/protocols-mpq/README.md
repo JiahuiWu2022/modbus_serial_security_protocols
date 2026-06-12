@@ -1,69 +1,69 @@
-# Modbus 串行链路安全扩展 6.4 参考实现
+# Reference Implementation of Modbus Serial-Link Security Extension based on the "post-quantum hybrid-signature PKI public-key certificate" profile 
 
-本项目实现《Modbus串行链路通信协议安全扩展技术要求》6.4 节描述的“基于后量子混合签名 PKI 公钥证书”的主从站参考端点，并提供一个单页 Web UI。
+This project implements reference master and slave endpoints for the "post-quantum hybrid-signature PKI public-key certificate" profile. It also provides a single-page Web UI.
 
-说明：当前 Python 依赖没有生产级 ML-KEM-768 / ML-DSA-44 实现，6.4 模块使用演示 KEM 与 Ed25519 演示证书链来保持 APDU 字段、密文长度、共享密钥长度和派生公式与文档一致。生产环境需要替换为合规的 ML-KEM/ML-DSA/X.509/HSM 实现。
+The current module uses ML-KEM-768 from `pqcrypto` for `KEM_C` and `KEM_BC` encapsulation and decapsulation, and ML-DSA-44 for root, brand, and device certificate-chain signature verification. The certificate container is still JSON for easier demonstration and testing. The built-in root and brand test keys are suitable only for local interoperability tests; production deployments must replace them with compliant X.509, HSM, or device-secure-storage implementations.
 
-说明：6.4 模块使用 `pqcrypto` 提供的 ML-KEM-768 完成 `KEM_C` / `KEM_BC` 封装与解封装，使用 ML-DSA-44 完成根/品牌/设备证书链签名验证。当前证书容器仍是便于演示和测试的 JSON 格式，内置根/品牌测试密钥只适合本地互通；生产环境需要替换为合规的 X.509/HSM 或设备安全存储实现。
+## Note:
 
-If a real UART interface is used in modbus_security_pq.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+If a real UART interface is used in `modbus_security_pq.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
 
-## 实现内容
+## Implemented Features
 
 - `ss_open_req` / `ss_open_cnf`
 - `ss_data_req` / `ss_data_cnf`
-- RTU 功能码 `0x00` 承载安全 APDU
-- 从站发起证书链交换
-- `KEM_C` / `KEM_BC` / `mode` 参数交换
-- `AKH` / `AKM` 认证密钥校验
-- `KEMSK`、`KEMSK_B`、`CK/CIV`、`BCK/BCIV` 派生
-- AES-GCM 内容加密后的 `ss_data_send`
-- 示例 Modbus `0x03` 保持寄存器读取
-- 单页 Web UI：参数校验、启动命令生成、读取视图和 6.4 消息序列
+- Security APDU transport over RTU function code `0x00`
+- Slave-initiated certificate-chain exchange
+- `KEM_C` / `KEM_BC` / `mode` parameter exchange
+- `AKH` / `AKM` authentication-key verification
+- `KEMSK`, `KEMSK_B`, `CK/CIV`, and `BCK/BCIV` derivation
+- `ss_data_send` with AES-GCM content encryption
+- Example Modbus `0x03` read-holding-registers operation
+- Single-page Web UI for parameter validation, startup-command generation, read views, and the Section 6.4 message sequence
 
-## 项目结构
+## Project Layout
 
 ```text
 .
-├── master_server.py              # 6.4 主站命令行端点
-├── slave_server.py               # 6.4 从站命令行端点
-├── modbus_security_pq.py         # 6.4 协议编解码、证书/KEM演示、握手和加解密
-├── web_frontend.py               # 单页 Web UI 静态服务器
-├── web/
-│   └── index.html                # 6.4 单页主页，内嵌 CSS/JS
-├── tests/
-│   └── test_modbus_security_pq.py
-├── requirements.txt
-└── Modbus串行链路通信协议安全扩展技术要求.docx
+|-- master_server.py              # Section 6.4 master command-line endpoint
+|-- slave_server.py               # Section 6.4 slave command-line endpoint
+|-- modbus_security_pq.py         # Section 6.4 protocol encoding/decoding, certificate/KEM demo, handshake, and encryption/decryption
+|-- web_frontend.py               # Static server for the single-page Web UI
+|-- web/
+|   `-- index.html                # Section 6.4 single-page UI with embedded CSS/JS
+|-- tests/
+|   `-- test_modbus_security_pq.py
+|-- requirements.txt
+`-- <technical requirements document>.docx
 ```
 
-## 环境要求
+## Requirements
 
-- Python 3.10 或更新版本
-- 可创建本地 TCP/socket 连接
-- Python 依赖：`cryptography>=42`
+- Python 3.10 or later
+- Ability to create local TCP/socket connections
+- Python dependency: `cryptography>=42`
 
-安装依赖：
+Install dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-## 命令行启动
+## Command-Line Startup
 
-先启动 6.4 从站：
+Start the Section 6.4 slave first:
 
 ```bash
 python3 slave_server.py --host 127.0.0.1 --port 15020
 ```
 
-另开一个终端启动主站并读取保持寄存器：
+In a second terminal, start the master and read holding registers:
 
 ```bash
 python3 master_server.py --host 127.0.0.1 --port 15020 --start 0 --quantity 4
 ```
 
-一次性从站示例：
+Example one-shot slave:
 
 ```bash
 python3 slave_server.py --host 127.0.0.1 --port 15020 --once
@@ -71,59 +71,56 @@ python3 slave_server.py --host 127.0.0.1 --port 15020 --once
 
 ## Web UI
 
-启动单页 Web UI：
+Start the single-page Web UI:
 
 ```bash
 python3 web_frontend.py --host 127.0.0.1 --port 8080
 ```
 
-打开：
+Open:
 
 ```text
 http://127.0.0.1:8080
 ```
 
-页面可以配置主从站参数、生成主站/从站启动命令、校验寄存器读取范围，并展示 6.4 握手消息序列。
+The page can configure master and slave parameters, generate startup commands, validate the register-read range, and display the Section 6.4 handshake message sequence.
 
-## 参数说明
+## Options
 
-`master_server.py` 和 `slave_server.py` 都支持：
+Both `master_server.py` and `slave_server.py` support:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--host` | `127.0.0.1` | TCP 监听或连接地址。 |
-| `--port` | `15020` | TCP 监听或连接端口。 |
-| `--slave-id` | `1` | Modbus 从站地址，范围 `1..247`，支持十进制或 `0x` 十六进制。 |
+| `--host` | `127.0.0.1` | TCP listen or connection address. |
+| `--port` | `15020` | TCP listen or connection port. |
+| `--slave-id` | `1` | Modbus slave address. Valid range: `1..247`. Decimal and `0x` hexadecimal values are supported. |
 
-主站额外参数：
+Additional master options:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--client-id` | `0x2001000100000001` | 主站客户端 ID，支持十进制或 `0x` 十六进制。 |
-| `--start` | `0` | 保持寄存器起始地址。 |
-| `--quantity` | `4` | 读取寄存器数量，范围 `1..125`。 |
+| `--client-id` | `0x2001000100000001` | Master client ID. Decimal and `0x` hexadecimal values are supported. |
+| `--start` | `0` | Starting holding-register address. |
+| `--quantity` | `4` | Number of registers to read. Valid range: `1..125`. |
 
-从站额外参数：
+Additional slave options:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--server-id` | `0x1001000100000001` | 从站服务器 ID，支持十进制或 `0x` 十六进制。 |
-| `--registers` | `64` | 示例保持寄存器数量。寄存器值按 `(索引 + 1) * 10` 自动生成。 |
-| `--once` | 关闭 | 处理一个主站连接后退出。 |
+| `--server-id` | `0x1001000100000001` | Slave server ID. Decimal and `0x` hexadecimal values are supported. |
+| `--registers` | `64` | Number of example holding registers. Register values are generated as `(index + 1) * 10`. |
+| `--once` | Disabled | Exit after handling one master connection. |
 
-## 测试
+## Tests
 
-运行单元测试：
+Run the unit tests:
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-测试覆盖：
+The tests cover:
 
-- SM3 已知向量
-- APDU 和数据载荷编解码
-- 6.4 后量子混合 PKI 主从站握手和加密读寄存器
-
-
-
+- SM3 known-answer vectors
+- APDU and data-payload encoding/decoding
+- Section 6.4 post-quantum hybrid PKI master/slave handshake and encrypted register reads

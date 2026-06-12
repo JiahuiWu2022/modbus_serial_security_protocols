@@ -1,48 +1,50 @@
-# Modbus 串行链路安全扩展 6.3 参考实现
+# Reference Implementation of Modbus Serial-Link Security Extension based on the "password or pre-shared key" profile 
 
-本项目实现《Modbus串行链路通信协议安全扩展技术要求》6.3 节描述的“基于口令或预共享密钥”的主从站参考端点，并提供命令行端点和浏览器界面。
+This project implements reference master and slave endpoints based on the "password or pre-shared key" profile. It provides command-line endpoints and a browser-based UI.
 
-RTU 帧本身包含从站地址、功能码和 CRC16。内容加密使用文档列出的 AES-GCM 模式，依赖 `cryptography`。
+The RTU frame itself carries the slave address, function code, and CRC16. Content encryption uses the AES-GCM mode specified in the document and depends on `cryptography`.
 
-If a real UART interface is used in modbus_security_psk.by, the socket initialized here is only formal and not actually used. Every frame read and sent is completed on UART.
+## Note:
 
-## 实现内容
+If a real UART interface is used in `modbus_security_psk.py`, the socket initialized here is only a placeholder and is not used for data transfer. Every frame is read from and sent through UART.
+
+## Implemented Features
 
 - `ss_sk_open_req` / `ss_sk_open_cnf`
 - `ss_sk_data_req` / `ss_sk_data_cnf`
-- RTU 功能码 `0x00` 承载安全 APDU
-- 预共享口令派生 SM2 曲线临时私钥和 ECC 随机点
-- `S_M` / `S_H` 双向认证码验证
-- `r_B` 广播密钥参数交换
-- AES-GCM 内容加密后的 `ss_data_send`
-- 示例 Modbus `0x03` 保持寄存器读取
-- Web 页面输入主从站参数并显示主站读取到的从站寄存器
+- Security APDU transport over RTU function code `0x00`
+- SM2-curve ephemeral private-key and ECC random-point derivation from the pre-shared password
+- Bidirectional `S_M` / `S_H` authentication-code verification
+- `r_B` broadcast-key parameter exchange
+- `ss_data_send` with AES-GCM content encryption
+- Example Modbus `0x03` read-holding-registers operation
+- Web page for entering master/slave parameters and displaying the slave registers read by the master
 
-## 项目结构
+## Project Layout
 
 ```text
 .
-├── master_server.py              # 主站命令行端点
-├── slave_server.py               # 从站命令行端点
-├── modbus_security_psk.py        # 协议编解码、握手、加解密和 Modbus PDU 处理
-├── web_frontend.py               # Web 服务和 JSON API
-├── web/
-│   ├── index.html                # 前端页面
-│   ├── styles.css                # 页面样式
-│   └── app.js                    # 前端交互逻辑
-├── tests/
-│   └── test_modbus_security_psk.py
-├── requirements.txt
-└── Modbus串行链路通信协议安全扩展技术要求.docx
+|-- master_server.py              # Master command-line endpoint
+|-- slave_server.py               # Slave command-line endpoint
+|-- modbus_security_psk.py        # Protocol encoding/decoding, handshake, encryption/decryption, and Modbus PDU handling
+|-- web_frontend.py               # Web service and JSON API
+|-- web/
+|   |-- index.html                # Frontend page
+|   |-- styles.css                # Page styles
+|   `-- app.js                    # Frontend interaction logic
+|-- tests/
+|   `-- test_modbus_security_psk.py
+|-- requirements.txt
+`-- <technical requirements document>.docx
 ```
 
-## 环境要求
+## Requirements
 
-- Python 3.10 或更新版本
-- 可创建本地 TCP/socket 连接
-- Python 依赖：`cryptography>=42`
+- Python 3.10 or later
+- Ability to create local TCP/socket connections
+- Python dependency: `cryptography>=42`
 
-建议使用虚拟环境：
+Using a virtual environment is recommended:
 
 ```bash
 python3 -m venv .venv
@@ -50,115 +52,115 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-如果不使用虚拟环境，也可以直接在当前 Python 环境安装依赖：
+If you do not use a virtual environment, install the dependencies directly into the current Python environment:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-## 命令行启动
+## Command-Line Startup
 
-先启动从站：
+Start the slave first:
 
 ```bash
 python3 slave_server.py --host 127.0.0.1 --port 15020 --password modbus-psk-demo
 ```
 
-另开一个终端启动主站并读取保持寄存器：
+In a second terminal, start the master and read holding registers:
 
 ```bash
 python3 master_server.py --host 127.0.0.1 --port 15020 --password modbus-psk-demo --start 0 --quantity 4
 ```
 
-一次性从站示例：
+Example one-shot slave:
 
 ```bash
 python3 slave_server.py --host 127.0.0.1 --port 15020 --password modbus-psk-demo --once
 ```
 
-主站成功读取后会输出类似内容：
+After a successful master read, the output is similar to:
 
 ```text
 handshake ok server_id=0x1001000100000001 mode=aes_gcm ck=... civ=...
 read holding registers start=0 quantity=4: [10, 20, 30, 40]
 ```
 
-## Web 界面启动
+## Web UI Startup
 
-启动浏览器界面：
+Start the browser UI:
 
 ```bash
 python3 web_frontend.py --host 127.0.0.1 --port 8080
 ```
 
-打开：
+Open:
 
 ```text
 http://127.0.0.1:8080
 ```
 
-页面提交参数后，后端会临时启动一次模拟从站，由主站完成安全握手并读取保持寄存器，再把读取结果、会话模式、客户端 ID、服务器 ID、CK 和 CIV 显示在页面中。
+After the page submits parameters, the backend temporarily starts a simulated slave. The master then completes the secure handshake, reads holding registers, and returns the read results, session mode, client ID, server ID, CK, and CIV to the page.
 
-## 参数说明
+## Options
 
-### 通用参数
+### Common Options
 
-`master_server.py` 和 `slave_server.py` 都支持以下参数：
+Both `master_server.py` and `slave_server.py` support:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--host` | `127.0.0.1` | TCP 监听或连接地址。 |
-| `--port` | `15020` | TCP 监听或连接端口。 |
-| `--slave-id` | `1` | Modbus 从站地址，范围 `1..247`，支持十进制或 `0x` 十六进制。 |
-| `--password` | `modbus-psk-demo` | 主从站共享口令。两端必须一致，否则认证失败。 |
+| `--host` | `127.0.0.1` | TCP listen or connection address. |
+| `--port` | `15020` | TCP listen or connection port. |
+| `--slave-id` | `1` | Modbus slave address. Valid range: `1..247`. Decimal and `0x` hexadecimal values are supported. |
+| `--password` | `modbus-psk-demo` | Shared password for the master and slave. Both sides must use the same value, or authentication fails. |
 
-### 主站参数
+### Master Options
 
-`master_server.py` 额外支持：
+`master_server.py` also supports:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--client-id` | `0x2001000100000001` | 主站客户端 ID，支持十进制或 `0x` 十六进制。 |
-| `--start` | `0` | 保持寄存器起始地址。 |
-| `--quantity` | `4` | 读取寄存器数量，范围 `1..125`。 |
+| `--client-id` | `0x2001000100000001` | Master client ID. Decimal and `0x` hexadecimal values are supported. |
+| `--start` | `0` | Starting holding-register address. |
+| `--quantity` | `4` | Number of registers to read. Valid range: `1..125`. |
 
-### 从站参数
+### Slave Options
 
-`slave_server.py` 额外支持：
+`slave_server.py` also supports:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--server-id` | `0x1001000100000001` | 从站服务器 ID，支持十进制或 `0x` 十六进制。 |
-| `--registers` | `64` | 示例保持寄存器数量。寄存器值按 `(索引 + 1) * 10` 自动生成。 |
-| `--once` | 关闭 | 处理一个主站连接后退出。 |
+| `--server-id` | `0x1001000100000001` | Slave server ID. Decimal and `0x` hexadecimal values are supported. |
+| `--registers` | `64` | Number of example holding registers. Register values are generated as `(index + 1) * 10`. |
+| `--once` | Disabled | Exit after handling one master connection. |
 
-### Web 服务参数
+### Web Service Options
 
-`web_frontend.py` 支持：
+`web_frontend.py` supports:
 
-| 参数 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `--host` | `127.0.0.1` | Web 服务监听地址。 |
-| `--port` | `8080` | Web 服务监听端口。 |
+| `--host` | `127.0.0.1` | Web-service listen address. |
+| `--port` | `8080` | Web-service listen port. |
 
-### Web 页面表单参数
+### Web Form Fields
 
-| 字段 | 默认值 | 说明 |
+| Field | Default | Description |
 | --- | --- | --- |
-| 监听地址 | `127.0.0.1` | 临时模拟从站绑定地址。 |
-| 监听端口 | `0` | 临时模拟从站端口。`0` 表示由系统自动分配空闲端口。 |
-| 从站地址 | `1` | Modbus 从站地址，范围 `1..247`。 |
-| 服务器 ID | `0x1001000100000001` | 临时模拟从站服务器 ID。 |
-| 共享口令 | `modbus-psk-demo` | 主从站共享口令。 |
-| 保持寄存器 | `10,20,30,...` | 临时模拟从站寄存器值，逗号或换行分隔，支持十进制和 `0x` 十六进制。 |
-| 目标地址 | `127.0.0.1` | 主站连接临时模拟从站的地址。 |
-| 客户端 ID | `0x2001000100000001` | 主站客户端 ID。 |
-| 起始地址 | `0` | 要读取的保持寄存器起始地址。 |
-| 读取数量 | `4` | 要读取的保持寄存器数量，范围 `1..125`。 |
+| Listen address | `127.0.0.1` | Binding address for the temporary simulated slave. |
+| Listen port | `0` | Port for the temporary simulated slave. `0` lets the system allocate an available port automatically. |
+| Slave address | `1` | Modbus slave address. Valid range: `1..247`. |
+| Server ID | `0x1001000100000001` | Server ID for the temporary simulated slave. |
+| Shared password | `modbus-psk-demo` | Shared password for the master and slave. |
+| Holding registers | `10,20,30,...` | Register values for the temporary simulated slave. Values may be comma-separated or newline-separated and may be decimal or `0x` hexadecimal. |
+| Target address | `127.0.0.1` | Address used by the master to connect to the temporary simulated slave. |
+| Client ID | `0x2001000100000001` | Master client ID. |
+| Start address | `0` | Starting holding-register address to read. |
+| Quantity | `4` | Number of holding registers to read. Valid range: `1..125`. |
 
 ## Web API
 
-Web 界面调用 `POST /api/read`。请求体为 JSON：
+The Web UI calls `POST /api/read`. The request body is JSON:
 
 ```json
 {
@@ -175,7 +177,7 @@ Web 界面调用 `POST /api/read`。请求体为 JSON：
 }
 ```
 
-成功响应：
+Successful response:
 
 ```json
 {
@@ -199,45 +201,44 @@ Web 界面调用 `POST /api/read`。请求体为 JSON：
 }
 ```
 
-失败响应：
+Failure response:
 
 ```json
 {
   "ok": false,
-  "error": "错误说明"
+  "error": "error description"
 }
 ```
 
-## 测试
+## Tests
 
-运行单元测试：
+Run the unit tests:
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-测试覆盖：
+The tests cover:
 
-- SM3 已知向量
-- APDU 和数据载荷编解码
-- 主从站握手和加密读寄存器
-- Web 后端嵌入式从站读寄存器流程
+- SM3 known-answer vectors
+- APDU and data-payload encoding/decoding
+- Master/slave handshake and encrypted register reads
+- Web-backend embedded-slave register-read flow
 
-## 常见问题
+## Troubleshooting
 
 ### `ModuleNotFoundError: No module named 'cryptography'`
 
-先安装依赖：
+Install the dependencies first:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-### 主站认证失败或连接报错
+### Master Authentication Fails or the Connection Fails
 
-检查主站和从站的 `--password`、`--slave-id` 是否一致，并确认从站已经在对应 `--host` / `--port` 上监听。
+Check that the master and slave use the same `--password` and `--slave-id`, and confirm that the slave is listening on the configured `--host` / `--port`.
 
-### Web 页面提示读取范围超出
+### The Web Page Reports That the Read Range Is Out of Bounds
 
-`起始地址 + 读取数量` 不能超过页面中配置的保持寄存器数量。
-
+`start address + quantity` must not exceed the number of holding registers configured on the page.
